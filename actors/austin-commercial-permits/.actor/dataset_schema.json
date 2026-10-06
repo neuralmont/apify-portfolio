@@ -3,7 +3,7 @@
   "title": "Austin issued permit records",
   "description": "Source-preserving records from the official Austin Issued Construction Permits dataset.",
   "fields": {
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$schema": "http://json-schema.org/draft-07/schema#",
     "type": "object",
     "properties": {
       "source_record_id": {"title":"Source record ID","type":"string"},

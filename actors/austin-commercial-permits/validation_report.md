@@ -37,7 +37,38 @@ The output directory contains `permits.jsonl`, `contractor_summary.jsonl`, and `
 
 ## Verification layers and private benchmark
 
-Local extraction is verified by the dependency-free runner and unit tests. Container verification and Apify cloud verification are separate gates and were not completed in this pass unless explicitly reported by the caller; the live HTTPS observation above is a local process observation, not an Apify cloud run. For a private benchmark, build from this nested directory and run the same input window at `maxResults` 100, 1,500, and 5,000. Record runtime, peak memory, billed usage, delivered rows, `matching_source_count`, `cap_truncated`, and final run status. Do not publish, enable charging, or schedule runs.
+Local extraction is verified by the dependency-free runner and unit tests. The current repository has Apify CLI 1.2.1, while the current npm CLI 1.10.0 was used for schema validation. Docker and Podman are not installed in this environment, so container verification could not be performed. Apify cloud verification was not performed; the live HTTPS observation above is a local process observation, not an Apify cloud run.
+
+The current CLI schema commands and results were:
+
+```bash
+cd actors/austin-commercial-permits
+apify validate-schema                         # local 1.2.1: input only, passed
+npx --yes apify-cli@latest validate-schema    # CLI 1.10.0: input, dataset, output passed
+```
+
+The nested manifest uses `dockerContextDir: ".."` because that path is relative to `.actor/actor.json`; the Dockerfile and README paths resolve at the Actor root, while the schema paths resolve under `.actor`. This matches the current Actor definition and monorepo documentation.
+
+Container commands to run when Docker is available:
+
+```bash
+cd actors/austin-commercial-permits
+docker build -t austin-commercial-permits-beta .
+storage_dir=$(mktemp -d /tmp/austin-actor-storage.XXXXXX)
+mkdir -p "$storage_dir/key_value_stores/default"
+cp input.example.json "$storage_dir/key_value_stores/default/INPUT.json"
+docker run --rm \
+  -e APIFY_LOCAL_STORAGE_DIR=/apify_storage \
+  -e APIFY_DEFAULT_DATASET_ID=default \
+  -e APIFY_DEFAULT_KEY_VALUE_STORE_ID=default \
+  -v "$storage_dir:/apify_storage" \
+  austin-commercial-permits-beta
+find "$storage_dir" -type f -print
+```
+
+Expected successful smoke-test evidence is exit status 0, permit items under the default dataset storage, and `RUN_SUMMARY.json` plus `CONTRACTOR_SUMMARY.json` under the default key-value store. To verify a genuine extraction failure preserves diagnostics and fails, repeat with `--network none`; metadata retrieval should be recorded in `RUN_SUMMARY` and the container should exit nonzero. This tests failure handling without changing source mappings.
+
+For a private benchmark, build from this nested directory and run the same date window at `maxResults` 100, 1,500, and 5,000. Record runtime and peak memory from the Apify run details, billed usage and usage charges from the run/build usage panels or API response, delivered rows and `matching_source_count` from `RUN_SUMMARY`, final status, build ID, run ID, and the dataset, `RUN_SUMMARY`, and `CONTRACTOR_SUMMARY` links. Keep build costs separate from run costs; do not infer cloud cost from local timing. Do not publish, enable charging, or schedule runs.
 
 ```bash
 cd actors/austin-commercial-permits
