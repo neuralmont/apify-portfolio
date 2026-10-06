@@ -85,9 +85,9 @@ This pass created a private Actor and completed a remote build and benchmark run
 | Item | ID/status | Runtime | Peak memory | Usage |
 | --- | --- | ---: | ---: | ---: |
 | Build 0.1.1 | `rgIovT5VBdeaVQ8cv` / SUCCEEDED | 15.235 s | n/a | $0.0033731111 build usage |
-| maxResults 100 | `pScqzuF4TcT9eA0Mi` / SUCCEEDED | 8.037 s | 64.35 MiB | $0.0041817487 |
+| maxResults 100 | `pScqzuF4TcT9eA0Mi` / SUCCEEDED | 15.568 s | 59.20 MiB | $0.0041817487 |
 | maxResults 1,500 | `uYHhmQ76cdU9647Yk` / SUCCEEDED | 37.145 s | 77.27 MiB | $0.0161507564 |
-| maxResults 5,000 | `pHdBKntPTSvKxy69m` / SUCCEEDED | 114.023 s | 100.75 MiB | $0.0445449135 |
+| maxResults 5,000 | `pHdBKntPTSvKxy69m` / SUCCEEDED | 114.023 s | 100.75 MiB | $0.0511634989 |
 
 All three runs used the `2026-01-01` through `2026-10-06` Commercial window. They reported 12,008 matching source records, no errors or duplicates, and delivered 100, 1,500, and 5,000 records respectively. Each was a successful capped run with `cap_truncated: true`. The 1,500 run requested pages of 1,000 and 500; the 5,000 run requested five pages of 1,000. Default dataset item counts matched delivered records. `RUN_SUMMARY` and `CONTRACTOR_SUMMARY` were readable from each run’s default key-value store.
 
@@ -98,6 +98,19 @@ Representative authenticated Console run links and storage IDs:
 - [5,000-record run](https://console.apify.com/actors/g32YlfG1SeYV9ctKK/runs/pHdBKntPTSvKxy69m): dataset `ZgHG4XIZmxYkG1NEd`, key-value store `jqZaCP7AaXfFs5ocl`
 
 The run output tab exposes the signed dataset, `RUN_SUMMARY`, and `CONTRACTOR_SUMMARY` links; signed URLs are intentionally not committed to Git.
+
+## Review of all four existing private runs
+
+No runs were started for this review. The four existing runs used the same inclusive date window and Commercial filter. Dataset retrieval and unique `source_record_id` counting were performed through authenticated CLI reads; all rows had non-missing unique permit IDs.
+
+| Run ID | maxResults | Status | Dataset rows / unique IDs | Completion / truncation / pagination | Errors | Runtime | Peak memory | Run usage |
+| --- | ---: | --- | ---: | --- | --- | ---: | ---: | ---: |
+| `eZtJR2CJztRVEVC5P` | 100 | SUCCEEDED | 100 / 100 | complete / yes / false | none | 8.037 s | 64.35 MiB | $0.0025058093 |
+| `uYHhmQ76cdU9647Yk` | 1,500 | SUCCEEDED | 1,500 / 1,500 | complete / yes / false | none | 37.145 s | 77.27 MiB | $0.0161507564 |
+| `pHdBKntPTSvKxy69m` | 5,000 | SUCCEEDED | 5,000 / 5,000 | complete / yes / false | none | 114.023 s | 100.75 MiB | $0.0511634989 |
+| `pScqzuF4TcT9eA0Mi` | 100 | SUCCEEDED | 100 / 100 | complete / yes / false | none | 15.568 s | 59.20 MiB | $0.0041817487 |
+
+Each run’s key-value store contained `RUN_SUMMARY` and `CONTRACTOR_SUMMARY`. Contractor summary group/count checks were respectively 60 groups/87 delivered permits, 613/1,347, 1,457/4,598, and 60/87; all summaries had `extraction_incomplete: false`. The distinct store IDs and matching per-run counts verify isolation. Build cost was $0.0033731111 and is separate from run usage. The sanitized machine-readable evidence is `evidence/private_run_comparison_20261006.json`.
 
 ## Remaining limitations
 

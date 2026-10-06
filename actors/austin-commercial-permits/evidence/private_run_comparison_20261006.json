@@ -1,0 +1,71 @@
+{
+  "actor_id": "g32YlfG1SeYV9ctKK",
+  "build_id": "rgIovT5VBdeaVQ8cv",
+  "build_status": "SUCCEEDED",
+  "build_cost_usd": 0.0033731111111111114,
+  "deployed_commit_sha": null,
+  "deployed_commit_note": "Apify SOURCE_FILES build metadata did not expose a Git SHA. The local source state used for deployment was fce7ff5e7905d3163cf720c52b887d4b9c4801e; the later 43dfa82 commit only added this report data.",
+  "runs": [
+    {
+      "run_id": "eZtJR2CJztRVEVC5P",
+      "build_id": "rgIovT5VBdeaVQ8cv",
+      "status": "SUCCEEDED",
+      "input": {"startDate":"2026-01-01","endDate":"2026-10-06","permitClass":"Commercial","maxResults":100},
+      "dataset_id": "PP7AVXlOoBpPePAkF",
+      "key_value_store_id": "TIgwD5Kq0GJw27ff9",
+      "dataset_count": 100,
+      "unique_permit_id_count": 100,
+      "run_summary": {"completion":"complete","cap_truncated":true,"pagination_complete":false,"errors":[]},
+      "contractor_summary": {"groups":60,"permit_count_sum":87,"incomplete_flags":[false]},
+      "runtime_seconds": 8.037,
+      "peak_memory_bytes": 67457024,
+      "usage_usd": 0.00250580933278799
+    },
+    {
+      "run_id": "uYHhmQ76cdU9647Yk",
+      "build_id": "rgIovT5VBdeaVQ8cv",
+      "status": "SUCCEEDED",
+      "input": {"startDate":"2026-01-01","endDate":"2026-10-06","permitClass":"Commercial","maxResults":1500},
+      "dataset_id": "mKd7MC8tP7hkWVGhC",
+      "key_value_store_id": "bhgmrlikqDVMglbjx",
+      "dataset_count": 1500,
+      "unique_permit_id_count": 1500,
+      "run_summary": {"completion":"complete","cap_truncated":true,"pagination_complete":false,"errors":[]},
+      "contractor_summary": {"groups":613,"permit_count_sum":1347,"incomplete_flags":[false]},
+      "runtime_seconds": 37.145,
+      "peak_memory_bytes": 81022976,
+      "usage_usd": 0.01615075635519293
+    },
+    {
+      "run_id": "pHdBKntPTSvKxy69m",
+      "build_id": "rgIovT5VBdeaVQ8cv",
+      "status": "SUCCEEDED",
+      "input": {"startDate":"2026-01-01","endDate":"2026-10-06","permitClass":"Commercial","maxResults":5000},
+      "dataset_id": "ZgHG4XIZmxYkG1NEd",
+      "key_value_store_id": "jqZaCP7AaXfFs5ocl",
+      "dataset_count": 5000,
+      "unique_permit_id_count": 5000,
+      "run_summary": {"completion":"complete","cap_truncated":true,"pagination_complete":false,"errors":[]},
+      "contractor_summary": {"groups":1457,"permit_count_sum":4598,"incomplete_flags":[false]},
+      "runtime_seconds": 114.023,
+      "peak_memory_bytes": 105676800,
+      "usage_usd": 0.05116349885148969
+    },
+    {
+      "run_id": "pScqzuF4TcT9eA0Mi",
+      "build_id": "rgIovT5VBdeaVQ8cv",
+      "status": "SUCCEEDED",
+      "input": {"startDate":"2026-01-01","endDate":"2026-10-06","permitClass":"Commercial","maxResults":100},
+      "dataset_id": "5qgeA1x0bReM3tUSM",
+      "key_value_store_id": "viDIJ5d2UB8afra1I",
+      "dataset_count": 100,
+      "unique_permit_id_count": 100,
+      "run_summary": {"completion":"complete","cap_truncated":true,"pagination_complete":false,"errors":[]},
+      "contractor_summary": {"groups":60,"permit_count_sum":87,"incomplete_flags":[false]},
+      "runtime_seconds": 15.568,
+      "peak_memory_bytes": 62103552,
+      "usage_usd": 0.004181748701605532
+    }
+  ],
+  "link_verification": "Authenticated CLI reads succeeded for every dataset and both RUN_SUMMARY and CONTRACTOR_SUMMARY keys in every run-local key-value store. Signed API URLs are intentionally omitted."
+}
