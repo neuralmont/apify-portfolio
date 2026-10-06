@@ -5,6 +5,7 @@
   "description": "Retrieves Austin issued construction permits with source-reported commercial classification and contractor activity. Permit records are not qualified leads or project confirmations.",
   "version": "0.1",
   "buildTag": "latest",
+  "dockerContextDir": ".",
   "dockerfile": "./Dockerfile",
   "readme": "./README.md",
   "input": "./input_schema.json",

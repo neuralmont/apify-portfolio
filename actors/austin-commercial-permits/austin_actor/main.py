@@ -3,9 +3,9 @@ import asyncio
 from .core import ActorInputError, ExtractionError, run_extraction
 
 try:
-    from apify import Actor, Dataset
+    from apify import Actor
 except ImportError:  # Local core tests do not require the SDK; Docker installs it.
-    Actor = Dataset = None
+    Actor = None
 
 
 async def main() -> None:
@@ -19,9 +19,7 @@ async def main() -> None:
         for record in result["records"]:
             await Actor.push_data(record)
         if data["includeContractorSummary"]:
-            summary_dataset = await Dataset.open(name="contractor-summary")
-            for row in result["contractor_summary"]:
-                await summary_dataset.push_data(row)
+            await Actor.set_value("CONTRACTOR_SUMMARY", result["contractor_summary"])
         await Actor.set_value("RUN_SUMMARY", result["summary"])
         await Actor.set_value("SCHEMA_METADATA", result["schema"])
         if result["summary"]["completion"] != "complete":

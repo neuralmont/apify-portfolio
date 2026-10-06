@@ -22,6 +22,7 @@ METADATA_URL = f"{BASE_URL}/api/views/{DATASET}"
 LANDING_URL = f"{BASE_URL}/Building-and-Development/Issued-Construction-Permits/{DATASET}"
 MAX_RESULTS = 5000
 PAGE_SIZE = 1000
+MAX_PAGE_REQUESTS = 100
 PERMIT_TYPES = ("BP", "EP", "MP", "PP", "DS")
 TRADES = ("General Contractor", "Electrical Contractor", "Plumbing Contractor", "Mechanical Contractor")
 REQUIRED_FIELDS = ("permit_number", "issue_date", "permittype", "permit_class_mapped", "description", "status_current", "permit_location", "total_job_valuation", "contractor_trade", "contractor_company_name")
@@ -188,21 +189,56 @@ def verify_schema(client: HttpClient) -> Dict[str, Any]:
     return {"metadata_url": METADATA_URL, "verified_fields": sorted(fields), "missing_required_fields": []}
 
 
+def _empty_summary(data: Dict[str, Any], started: float, client: HttpClient, errors: List[str], schema: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    return {
+        "completion": "incomplete", "effective_input": data,
+        "source": {"dataset": DATASET, "metadata_url": METADATA_URL, "landing_url": LANDING_URL,
+                   "date_semantics": "issue_date is a source date-only field; inclusive America/Chicago calendar dates are sent as source date boundaries without claiming UTC timestamp precision"},
+        "matching_source_count": None, "records_fetched": 0, "records_delivered": 0,
+        "records_filtered": 0, "records_deduplicated": 0, "server_side_filtering": True,
+        "pagination_complete": False, "cap_truncated": False, "cap_truncation_reason": None,
+        "pagination": {"page_requests": [], "guard_limit": MAX_PAGE_REQUESTS},
+        "errors": errors, "resource": {"requests": getattr(client, "requests", 0), "retries": getattr(client, "retries_used", 0), "bytes_received": getattr(client, "bytes", 0), "elapsed_seconds": round(time.monotonic() - started, 3)},
+        "field_completeness": completeness([]),
+    }, schema
+
+
 def run_extraction(data: Dict[str, Any], client: Optional[HttpClient] = None, observed_at: Optional[str] = None) -> Dict[str, Any]:
     client = client or HttpClient(); observed_at = observed_at or datetime.now().astimezone().isoformat(); started = time.monotonic(); rows: List[Dict[str, Any]] = []; raw_ids = set(); errors: List[str] = []; records_seen = 0; duplicate_count = 0
-    schema = verify_schema(client)
+    try:
+        schema = verify_schema(client)
+    except ExtractionError as exc:
+        errors.append("metadata request/validation failed: " + str(exc))
+        summary, schema = _empty_summary(data, started, client, errors)
+        return {"records": [], "contractor_summary": [], "summary": summary, "schema": schema}
     where = build_where(data)
-    count_data = client.get_json(RESOURCE_URL, {"$select":"count(*) as n", "$where":where})
-    matching_count = int(count_data[0]["n"]) if count_data else 0
-    page_size = min(PAGE_SIZE, data["maxResults"]); offset = 0; pagination_complete = True; stop_reason = None
+    try:
+        count_data = client.get_json(RESOURCE_URL, {"$select":"count(*) as n", "$where":where})
+        matching_count = int(count_data[0]["n"]) if count_data else 0
+    except (ExtractionError, KeyError, TypeError, ValueError) as exc:
+        errors.append("count request failed: " + str(exc))
+        summary, schema = _empty_summary(data, started, client, errors, schema)
+        return {"records": [], "contractor_summary": [], "summary": summary, "schema": schema}
+    offset = 0; pagination_complete = True; stop_reason = None; seen_page_signatures = set(); page_requests = 0; page_log: List[Dict[str, int]] = []
     while len(rows) < data["maxResults"]:
+        page_requests += 1
+        if page_requests > MAX_PAGE_REQUESTS:
+            errors.append(f"pagination exceeded {MAX_PAGE_REQUESTS} page requests")
+            pagination_complete = False; stop_reason = "pagination_guard"; break
+        remaining = data["maxResults"] - len(rows)
+        page_size = min(PAGE_SIZE, remaining)
         try:
             page = client.get_json(RESOURCE_URL, {"$where":where,"$order":"issue_date DESC, permit_number ASC","$limit":page_size,"$offset":offset})
         except ExtractionError as exc:
             errors.append(str(exc)); pagination_complete = False; stop_reason = "request_error"; break
         if not page: break
+        records_seen += len(page)
+        page_log.append({"offset": offset, "requested_limit": page_size, "returned": len(page)})
+        signature = tuple(str(item.get("permit_number")) for item in page if isinstance(item, dict))
+        if signature in seen_page_signatures:
+            errors.append("repeated page detected at offset " + str(offset)); pagination_complete = False; stop_reason = "repeated_page"; break
+        seen_page_signatures.add(signature)
         for raw in page:
-            records_seen += 1
             try: record = normalize_record(raw, observed_at)
             except ExtractionError as exc: errors.append(str(exc)); pagination_complete = False; continue
             if record["source_record_id"] in raw_ids:
@@ -211,11 +247,22 @@ def run_extraction(data: Dict[str, Any], client: Optional[HttpClient] = None, ob
             if len(rows) >= data["maxResults"]: break
         offset += len(page)
         if len(page) < page_size: break
-    cap_truncated = matching_count > data["maxResults"]
-    if cap_truncated: stop_reason = "maxResults_cap"; pagination_complete = False
+    cap_truncated = matching_count > data["maxResults"] or (len(rows) >= data["maxResults"] and matching_count > len(rows))
+    if cap_truncated and not errors: stop_reason = "maxResults_cap"
+    # A cap is an intentional successful termination. The full source window is
+    # explicitly marked truncated, but the requested result is still complete.
+    cap_success = cap_truncated and len(rows) == data["maxResults"] and not errors
+    if cap_truncated: pagination_complete = False
     if pagination_complete and not cap_truncated and len(rows) < matching_count: pagination_complete = False; stop_reason = stop_reason or "short_or_inconsistent_pagination"
-    complete = pagination_complete and not errors and (not cap_truncated)
-    summary = {"completion":"complete" if complete else "incomplete","effective_input":data,"source":{"dataset":DATASET,"metadata_url":METADATA_URL,"landing_url":LANDING_URL,"date_semantics":"issue_date is a source date-only field; inclusive America/Chicago calendar dates are sent as source date boundaries without claiming UTC timestamp precision"},"matching_source_count":matching_count,"records_fetched":records_seen,"records_delivered":len(rows),"records_filtered":0,"records_deduplicated":duplicate_count,"server_side_filtering":True,"pagination_complete":pagination_complete,"cap_truncated":cap_truncated,"cap_truncation_reason":stop_reason,"errors":errors,"resource":{"requests":client.requests,"retries":client.retries_used,"bytes_received":client.bytes,"elapsed_seconds":round(time.monotonic()-started,3)},"field_completeness":completeness(rows)}
+    complete = (pagination_complete and not errors and not cap_truncated) or cap_success
+    if not cap_truncated and len(rows) > matching_count:
+        pagination_complete = False
+        stop_reason = "inconsistent_count"
+        errors.append("inconsistent pagination: delivered rows exceed source count")
+        complete = False
+    if not complete and not errors and len(rows) < matching_count and not cap_truncated:
+        errors.append("inconsistent pagination: source count exceeds delivered rows")
+    summary = {"completion":"complete" if complete else "incomplete","effective_input":data,"source":{"dataset":DATASET,"metadata_url":METADATA_URL,"landing_url":LANDING_URL,"date_semantics":"issue_date is a source date-only field; inclusive America/Chicago calendar dates are sent as source date boundaries without claiming UTC timestamp precision"},"matching_source_count":matching_count,"records_fetched":records_seen,"records_delivered":len(rows),"records_filtered":0,"records_deduplicated":duplicate_count,"server_side_filtering":True,"pagination_complete":pagination_complete,"cap_truncated":cap_truncated,"cap_truncation_reason":stop_reason,"pagination":{"page_requests":page_log,"guard_limit":MAX_PAGE_REQUESTS},"errors":errors,"resource":{"requests":getattr(client,"requests",0),"retries":getattr(client,"retries_used",0),"bytes_received":getattr(client,"bytes",0),"elapsed_seconds":round(time.monotonic()-started,3)},"field_completeness":completeness(rows)}
     return {"records":rows,"contractor_summary":contractor_summary(rows,not complete),"summary":summary,"schema":schema}
 
 

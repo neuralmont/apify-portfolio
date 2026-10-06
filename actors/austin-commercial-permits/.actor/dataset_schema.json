@@ -1,11 +1,36 @@
 {
   "actorSpecification": 1,
+  "title": "Austin issued permit records",
+  "description": "Source-preserving records from the official Austin Issued Construction Permits dataset.",
   "fields": {
-    "source_record_id": {"label":"Source record ID","type":"string"},
-    "permit_number": {"label":"Permit number","type":"string"},
-    "issue_date": {"label":"Issued date","type":"string"},
-    "permit_class": {"label":"Source permit class","type":"string"},
-    "contractor_name": {"label":"Contractor name","type":"string"},
-    "project_valuation": {"label":"Source valuation","type":"number"}
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "source_record_id": {"title":"Source record ID","type":"string"},
+      "permit_number": {"title":"Permit number","type":"string"},
+      "issue_date": {"title":"Issued date","type":"string"},
+      "status_raw": {"title":"Source status","type":["string","null"]},
+      "source_permit_type": {"title":"Source permit type","type":["string","null"]},
+      "source_permit_type_description": {"title":"Source permit type description","type":["string","null"]},
+      "source_class": {"title":"Source permit class","type":["string","null"]},
+      "work_class": {"title":"Source work class","type":["string","null"]},
+      "work_description": {"title":"Source work description","type":["string","null"]},
+      "project_address": {"title":"Source permit address","type":["string","null"]},
+      "latitude": {"title":"Source latitude","type":["string","number","null"]},
+      "longitude": {"title":"Source longitude","type":["string","number","null"]},
+      "contractor_name": {"title":"Source contractor company","type":["string","null"]},
+      "contractor_trade": {"title":"Source contractor trade","type":["string","null"]},
+      "project_valuation": {"title":"Source valuation; preserved as returned, commonly a string","type":["string","null"]},
+      "observation_timestamp": {"title":"Observation timestamp","type":"string"},
+      "source_link": {"title":"Source record query URL","type":"string"}
+    },
+    "required": ["source_record_id", "permit_number", "issue_date", "observation_timestamp", "source_link"]
+  },
+  "views": {
+    "overview": {
+      "title": "Permit records",
+      "transformation": {"fields": ["source_record_id", "permit_number", "issue_date", "source_class", "source_permit_type", "work_description", "project_address", "contractor_name", "contractor_trade", "project_valuation", "source_link"]},
+      "display": {"component": "table"}
+    }
   }
 }

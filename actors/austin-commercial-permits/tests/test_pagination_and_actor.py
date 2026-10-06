@@ -1,0 +1,135 @@
+import asyncio
+import json
+import sys
+import tempfile
+import unittest
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).parents[1]))
+
+from austin_actor import core  # noqa: E402
+from austin_actor import main as actor_main  # noqa: E402
+
+
+FIELDS = [
+    "permit_number", "issue_date", "permittype", "permit_class_mapped", "description",
+    "status_current", "permit_location", "total_job_valuation", "contractor_trade",
+    "contractor_company_name",
+]
+
+
+def row(number):
+    return {
+        "permit_number": f"A-{number}", "issue_date": "2026-10-06T00:00:00.000",
+        "permittype": "BP", "permit_class_mapped": "Commercial", "description": "Office buildout",
+        "status_current": "Issued", "permit_location": f"{number} Congress Ave",
+        "total_job_valuation": "1000", "contractor_trade": "General Contractor",
+        "contractor_company_name": "Acme Builders LLC",
+    }
+
+
+class OffsetSource:
+    def __init__(self, pages=None, count=0, metadata_error=None, count_error=None, page_error=None):
+        self.pages = pages or {}
+        self.count = count
+        self.metadata_error = metadata_error
+        self.count_error = count_error
+        self.page_error = page_error
+        self.calls = []
+        self.requests = self.retries_used = self.bytes = 0
+
+    def get_json(self, url, params):
+        self.calls.append((url, dict(params)))
+        if "api/views" in url:
+            if self.metadata_error:
+                raise core.ExtractionError(self.metadata_error)
+            return {"columns": [{"fieldName": field} for field in FIELDS]}
+        if params.get("$select"):
+            if self.count_error:
+                raise core.ExtractionError(self.count_error)
+            return [{"n": str(self.count)}]
+        offset = int(params["$offset"])
+        if self.page_error and offset == self.page_error[0]:
+            raise core.ExtractionError(self.page_error[1])
+        return self.pages.get(offset, [])
+
+
+def data(max_results=100):
+    return core.validate_input({"startDate": "2026-10-01", "endDate": "2026-10-06", "maxResults": max_results})
+
+
+class PaginationTests(unittest.TestCase):
+    def test_successful_capped_extraction_is_complete_but_truncated(self):
+        source = OffsetSource({0: [row(i) for i in range(100)]}, count=250)
+        result = core.run_extraction(data(100), source, "t")
+        self.assertEqual(result["summary"]["completion"], "complete")
+        self.assertTrue(result["summary"]["cap_truncated"])
+        self.assertEqual(result["summary"]["cap_truncation_reason"], "maxResults_cap")
+        self.assertEqual(result["summary"]["records_fetched"], 100)
+        self.assertFalse(result["summary"]["errors"])
+
+    def test_two_pages_and_final_limit_are_requested(self):
+        source = OffsetSource({0: [row(i) for i in range(1000)], 1000: [row(i) for i in range(1000, 1500)]}, count=1500)
+        result = core.run_extraction(data(1500), source, "t")
+        page_calls = [params for url, params in source.calls if params.get("$offset") is not None]
+        self.assertEqual([int(call["$limit"]) for call in page_calls], [1000, 500])
+        self.assertEqual(result["summary"]["records_fetched"], 1500)
+        self.assertEqual(result["summary"]["records_delivered"], 1500)
+        self.assertEqual(result["summary"]["completion"], "complete")
+
+    def test_failure_after_first_page_preserves_partial_results_and_error(self):
+        source = OffsetSource({0: [row(i) for i in range(1000)]}, count=1500, page_error=(1000, "page two unavailable"))
+        result = core.run_extraction(data(1500), source, "t")
+        self.assertEqual(result["summary"]["completion"], "incomplete")
+        self.assertEqual(result["summary"]["records_delivered"], 1000)
+        self.assertIn("page two unavailable", result["summary"]["errors"][0])
+
+    def test_metadata_and_count_failures_are_diagnostic(self):
+        metadata = core.run_extraction(data(), OffsetSource(metadata_error="HTTP 503 metadata"), "t")
+        self.assertIn("metadata request/validation failed", metadata["summary"]["errors"][0])
+        counted = core.run_extraction(data(), OffsetSource(count=1, count_error="HTTP 500 count"), "t")
+        self.assertIn("count request failed", counted["summary"]["errors"][0])
+
+    def test_repeated_page_is_bounded_and_visible(self):
+        repeated = [row(i) for i in range(1000)]
+        source = OffsetSource({0: repeated, 1000: repeated}, count=2000)
+        result = core.run_extraction(data(1500), source, "t")
+        self.assertEqual(result["summary"]["completion"], "incomplete")
+        self.assertTrue(any("repeated page" in error for error in result["summary"]["errors"]))
+        self.assertLessEqual(len(source.calls), 4)
+
+    def test_inconsistent_count_is_an_error(self):
+        source = OffsetSource({0: [row(1), row(2)]}, count=1)
+        result = core.run_extraction(data(100), source, "t")
+        self.assertEqual(result["summary"]["completion"], "incomplete")
+        self.assertTrue(any("delivered rows exceed source count" in error for error in result["summary"]["errors"]))
+
+
+class ActorOutputTests(unittest.TestCase):
+    def test_contractor_summary_is_a_run_local_key_value_artifact(self):
+        pushed = []
+        values = {}
+
+        class FakeActor:
+            async def __aenter__(self): return self
+            async def __aexit__(self, *args): return False
+            async def get_input(self): return {"startDate":"2026-10-01", "endDate":"2026-10-06"}
+            async def push_data(self, item): pushed.append(item)
+            async def set_value(self, key, value): values[key] = value
+
+        original_actor = actor_main.Actor
+        original_run = actor_main.run_extraction
+        actor_main.Actor = FakeActor()
+        actor_main.run_extraction = lambda data: {
+            "records": [{"source_record_id":"A-1"}],
+            "contractor_summary": [{"contractor_name_original":"Acme Builders LLC", "delivered_permit_count":1, "count_is_not_project_count":True}],
+            "summary": {"completion":"complete"}, "schema": {"verified_fields": []},
+        }
+        try:
+            asyncio.run(actor_main.main())
+        finally:
+            actor_main.Actor = original_actor
+            actor_main.run_extraction = original_run
+        self.assertIn("CONTRACTOR_SUMMARY", values)
+        self.assertNotIn("contractor-summary", values)
+        self.assertEqual(len(pushed), 1)

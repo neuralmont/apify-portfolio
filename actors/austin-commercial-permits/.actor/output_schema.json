@@ -1,7 +1,25 @@
 {
-  "title":"Austin permit run summary",
-  "description":"Key-value output named RUN_SUMMARY describes extraction completeness, counts, filters, resource usage, and limitations.",
+  "actorOutputSchemaVersion": 1,
+  "title": "Austin commercial permits beta outputs",
+  "description": "Issued permit records are in the run's default dataset. Run diagnostics and the isolated contractor activity summary are JSON artifacts in the run's default key-value store.",
   "properties": {
-    "RUN_SUMMARY": {"type":"object","template":{"completion":"{{completion}}","recordsDelivered":"{{recordsDelivered}}","matchingSourceCount":"{{matchingSourceCount}}"}}
+    "permitResults": {
+      "type": "string",
+      "title": "Permit results",
+      "description": "Issued permit records delivered by this run.",
+      "template": "{{links.apiDefaultDatasetUrl}}/items"
+    },
+    "runSummary": {
+      "type": "string",
+      "title": "RUN_SUMMARY",
+      "description": "Machine-readable run status, counts, errors, pagination, and resource diagnostics.",
+      "template": "{{links.apiDefaultKeyValueStoreUrl}}/records/RUN_SUMMARY"
+    },
+    "contractorSummary": {
+      "type": "string",
+      "title": "Contractor activity summary",
+      "description": "JSON artifact isolated to this run; counts describe activity within delivered permit records, not distinct construction projects.",
+      "template": "{{links.apiDefaultKeyValueStoreUrl}}/records/CONTRACTOR_SUMMARY"
+    }
   }
 }

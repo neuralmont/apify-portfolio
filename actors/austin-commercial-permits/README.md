@@ -2,7 +2,7 @@
 
 This is a bounded, local Apify Actor beta for Austin’s official [Issued Construction Permits](https://data.austintexas.gov/d/3syk-w9eu) dataset. It is intentionally limited to issued permits and does not enrich records, infer commercial use, or claim demand, market share, publication latency, or longitudinal reliability.
 
-The Actor verifies the dataset schema before querying, applies filters in Socrata SoQL, paginates deterministically by `issue_date DESC, permit_number ASC`, preserves source values, and emits a machine-readable `RUN_SUMMARY`. A contractor summary is a separate dataset artifact and describes activity within the delivered permit records only; its counts are not project counts.
+The Actor verifies the dataset schema before querying, applies filters in Socrata SoQL, paginates deterministically by `issue_date DESC, permit_number ASC`, preserves source values, and emits a machine-readable `RUN_SUMMARY`. A contractor summary is a JSON artifact in the run’s default key-value store and describes activity within the delivered permit records only; its counts are not project counts and are isolated to each run.
 
 ## Inputs
 
@@ -21,12 +21,12 @@ pip install -r requirements.txt
 python run_local.py --input input.json --output-dir local_output
 ```
 
-The dependency-free core can also be tested without installing the SDK. An incomplete retrieval exits with status 2 after preserving delivered records and the run summary. The Actor runtime raises after pushing delivered records when `RUN_SUMMARY.completion` is `incomplete`.
+The dependency-free core can also be tested without installing the SDK. Reaching `maxResults` without errors is successful with `cap_truncated: true` and an explicit full-window truncation reason. Request failures, invalid records, duplicate IDs, repeated pages, and inconsistent pagination produce `completion: incomplete`; the local runner exits status 2 after preserving delivered records and diagnostics. The Actor runtime raises after pushing delivered records when `RUN_SUMMARY.completion` is `incomplete`.
 
 ## Actor run
 
-The Dockerfile uses the current Apify Python base image and installs the pinned major-version SDK range. Build and run locally with the Apify CLI or Docker after installing the project dependencies. The Actor writes permit records to the default dataset, a separate `contractor-summary` dataset when requested, and `RUN_SUMMARY` plus `SCHEMA_METADATA` key-value records. It does not publish, schedule, configure billing, or deploy anything.
+The Dockerfile uses the current Apify Python base image and installs the pinned major-version SDK range. Build and run locally with the Apify CLI or Docker from this nested directory. The Actor writes permit records to the default dataset and `RUN_SUMMARY`, `SCHEMA_METADATA`, and `CONTRACTOR_SUMMARY` JSON artifacts to the run’s default key-value store. It does not publish, schedule, configure billing, or deploy anything.
 
 ## Interpretation limits
 
-The source class is preserved as `source_class`; no fallback text inference is performed by the Actor. Missing source values remain null. The issued-only source cannot identify unissued or in-progress applications. A `maxResults` cap makes the run incomplete by design, even though the returned rows are valid. Repeated runs are observations, not a guarantee of freshness or complete territory coverage.
+The source class is preserved as `source_class`; no fallback text inference is performed by the Actor. Missing source values remain null. The issued-only source cannot identify unissued or in-progress applications. A `maxResults` cap marks the full source window as truncated but is successful when the requested rows were delivered without errors. Repeated runs are observations, not a guarantee of freshness or complete territory coverage.

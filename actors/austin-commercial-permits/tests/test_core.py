@@ -86,14 +86,14 @@ def test_contractors_are_grouped_by_original_name_and_trade():
     assert all(x["count_is_not_project_count"] for x in grouped)
 
 
-def test_pagination_cap_reports_raw_fetch_and_incomplete_status():
+def test_pagination_cap_reports_raw_fetch_and_successful_truncation():
     client = FakeClient([[source_row(str(i)) for i in range(3)]], count=10)
     result = run_extraction(validate_input({"startDate": "2026-10-01", "endDate": "2026-10-06", "maxResults": 3}), client, "t")
     assert len(result["records"]) == 3
     assert result["summary"]["records_fetched"] == 3
     assert result["summary"]["records_delivered"] == 3
     assert result["summary"]["records_deduplicated"] == 0
-    assert result["summary"]["completion"] == "incomplete"
+    assert result["summary"]["completion"] == "complete"
     assert result["summary"]["cap_truncated"] is True
 
 

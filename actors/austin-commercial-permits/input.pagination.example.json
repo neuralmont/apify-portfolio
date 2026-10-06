@@ -1,0 +1,7 @@
+{
+  "startDate": "2026-01-01",
+  "endDate": "2026-10-06",
+  "permitClass": "Commercial",
+  "maxResults": 1500,
+  "includeContractorSummary": true
+}
