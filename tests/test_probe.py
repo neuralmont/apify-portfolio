@@ -12,6 +12,12 @@ class ProbeTests(unittest.TestCase):
         out=normalize(row,s,"2026-10-06T00:00:00Z")
         self.assertEqual(out["source_record_id"],"A-1"); self.assertEqual(out["commercial_classification"],"unknown")
 
+    def test_seattle_company_field_is_contractor_evidence(self):
+        s=SOURCES["seattle"]
+        row={"permitnum":"S-1","permitclassmapped":"Commercial","description":"New building","contractorcompanyname":"Acme Builders LLC"}
+        out=normalize(row,s,"2026-10-06T00:00:00Z")
+        self.assertEqual(out["contractor_names"],["Acme Builders LLC"])
+
     def test_source_scoped_identity_and_duplicate_rejection(self):
         with tempfile.TemporaryDirectory() as d:
             p=Path(d)/"rows.jsonl"; p.write_text('\n'.join([
@@ -27,7 +33,7 @@ class ProbeTests(unittest.TestCase):
             old.write_text(json.dumps({"source_dataset":"d","source_record_id":"1","status_raw":"A"})+"\n")
             new.write_text(json.dumps({"source_dataset":"d","source_record_id":"1","status_raw":"B"})+"\n")
             compare(old,new,out); self.assertEqual(len(out.read_text().splitlines()),1)
-            self.assertEqual(load_rows(old)[("d","1")]["status_raw"],"A")
+            self.assertEqual(load_rows(old)[("d","1","")]["status_raw"],"A")
 
     def test_verified_empty_is_distinct(self):
         with tempfile.TemporaryDirectory() as d:
@@ -43,6 +49,14 @@ class ProbeTests(unittest.TestCase):
 
     def test_missing_id_rejected(self):
         with self.assertRaises(ProbeError): identity({"source_dataset":"x"})
+
+    def test_overlapping_cohorts_are_distinct_but_duplicate_within_cohort_rejected(self):
+        issued={"source_dataset":"76t5-zqzr","source_record_id":"606-1","cohort":"issued"}
+        application={"source_dataset":"76t5-zqzr","source_record_id":"606-1","cohort":"application_date_sample"}
+        self.assertNotEqual(identity(issued),identity(application))
+        with tempfile.TemporaryDirectory() as d:
+            p=Path(d)/"cohort.jsonl"; p.write_text(json.dumps(issued)+"\n"+json.dumps(issued)+"\n")
+            with self.assertRaises(ProbeError): load_rows(p)
 
     def test_partial_and_all_city_failure_exit_without_advancing_baselines(self):
         class FakeClient:

@@ -1,4 +1,4 @@
-# Source inventory (verified 2026-10-06)
+# Source inventory and runtime verification plan (checked 2026-10-06)
 
 | City | Official dataset | Endpoint | Date field used | Update / scope evidence |
 |---|---|---|---|---|
@@ -8,4 +8,4 @@
 
 All three are public Socrata resources. Portal metadata exposes schema and row access through the `/api/views/{id}` and `/resource/{id}.json` endpoints. Chicago’s metadata labels the license “See Terms of Use”; Seattle’s Data.gov record labels access public; Austin’s portal provides the public dataset page. The probe does not bypass authentication or use an app token.
 
-The exact schema is fetched by the portal at runtime where needed; the normalizer preserves raw values and uses explicit aliases for known field-name differences. A schema mismatch is reported as an extraction error rather than silently guessed.
+The exact schema is fetched by the portal at runtime before any sample query. Required mappings are fatal if absent; optional mappings are reported in the per-city manifest and remain null. The checked-in mapping table is a configuration to validate, not a claim that every optional field was verified in this blocked environment. In particular, Chicago component address and numbered contractor-role fields, Seattle’s `contractorcompanyname`, and Austin’s `permit_location`, `est_project_cost`, `status_current`, and classification field require live metadata confirmation. Raw sampled records are preserved for that audit. A schema mismatch is reported as an extraction error rather than silently guessed.

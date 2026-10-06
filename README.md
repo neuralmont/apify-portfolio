@@ -6,12 +6,13 @@ This is a reproducible, bounded probe—not an Actor, lead qualifier, dashboard,
 
 ```bash
 python3 -m unittest discover -s tests -v
-python3 probe.py live --cities chicago seattle austin --limit 100 --since 2026-09-06 --until 2026-10-06 --seattle-in-progress --out outputs/live.csv
-python3 probe.py compare outputs/baselines/chicago.jsonl outputs/snapshots/<timestamp>/chicago/normalized.jsonl --out outputs/events.jsonl
+END=$(date -u +%F); START=$(date -u -v-30d +%F)
+python3 probe.py live --cities chicago seattle austin --limit 100 --since "$START" --until "$END" --seattle-in-progress --out outputs/live.csv
+python3 probe.py compare outputs/previous/chicago.jsonl outputs/snapshots/<timestamp>/chicago/normalized.jsonl --old-manifest outputs/snapshots/<previous>/manifest.json --new-manifest outputs/snapshots/<timestamp>/manifest.json --out outputs/events.jsonl
 python3 probe.py compare fixtures/before.jsonl fixtures/after.jsonl --out /tmp/permit-fixture-events.jsonl
 ```
 
-`live` uses explicit inclusive UTC whole-date boundaries (default: the last 30 days), fetches and validates official schema metadata before querying, and writes raw samples, normalized cohorts, a timestamped manifest, and metrics. Chicago and Austin use issued cohorts. Seattle’s optional application/in-progress cohort is separate and must not be interpreted as issue-date coverage. A failed city never advances its baseline; a successful zero-count result is recorded as `verified_empty`. Incomplete extraction exits 2. `compare` keys by `(source_dataset, source_record_id)`, rejects missing/duplicate identities, emits no removals, and creates deterministic transition-specific event IDs.
+`live` uses explicit inclusive UTC whole-date boundaries (default: the last 30 days), fetches and validates official schema metadata before querying, and writes raw samples, normalized cohorts, and a timestamped manifest. Chicago and Austin use issued cohorts. Seattle’s optional `application_date_sample` is separate and must not be interpreted as an in-progress predicate. A failed city never advances its baseline; a successful zero-count result is recorded as `verified_empty`. Incomplete extraction exits 2 and rewrites aggregate outputs with an explicit incomplete manifest. `compare` keys by `(source_dataset, source_record_id, cohort)`, rejects missing/duplicate identities within a cohort, emits no removals, and creates deterministic transition-specific event IDs. Compare the immutable `previous` path from the manifest to the new `current_snapshot`, never a mutable baseline against itself.
 
 ## Sources and mappings
 

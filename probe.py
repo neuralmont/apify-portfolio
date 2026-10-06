@@ -13,7 +13,7 @@ FIELDS = ["city","source_dataset","source_record_id","permit_number","source_url
 # Explicit mappings are accepted only after /api/views/{id} confirms fields.
 SOURCES = {
  "chicago": {"city":"Chicago","dataset":"ydr8-5enu","domain":"https://data.cityofchicago.org","date":"issue_date","id":"id","permit":"permit_","url":"https://data.cityofchicago.org/resource/ydr8-5enu.json","mapping":{"application":"application_start_date","issue":"issue_date","status":"permit_status","type":"permit_type","description":"work_description","valuation":"reported_cost","postal":"zip_code","updated":"_updated_at","category":"permit_type","address_parts":["street_number","street_direction","street_name","street_type","street_suffix"],"lat":"latitude","lon":"longitude","contractor_fields":[["contractor_1_type","contractor_1_name"],["contractor_2_type","contractor_2_name"],["contractor_3_type","contractor_3_name"],["contractor_4_type","contractor_4_name"],["contractor_5_type","contractor_5_name"],["contractor_6_type","contractor_6_name"],["contractor_7_type","contractor_7_name"],["contractor_8_type","contractor_8_name"],["contractor_9_type","contractor_9_name"],["contractor_10_type","contractor_10_name"]]}},
- "seattle": {"city":"Seattle","dataset":"76t5-zqzr","domain":"https://data.seattle.gov","date":"issueddate","application_date":"applicationdate","id":"permitnum","permit":"permitnum","url":"https://data.seattle.gov/resource/76t5-zqzr.json","mapping":{"application":"applicationdate","issue":"issueddate","status":"statuscurrent","type":"permitclassmapped","description":"description","updated":"_updated_at","category":"permitclassmapped","address":"originaladdress1","postal":"originalzip","lat":"latitude","lon":"longitude","valuation":"estprojectcost","contractor_fields":[["contractorcompanyname","contractorcompanyname"]]}},
+ "seattle": {"city":"Seattle","dataset":"76t5-zqzr","domain":"https://data.seattle.gov","date":"issueddate","application_date":"applicationdate","id":"permitnum","permit":"permitnum","url":"https://data.seattle.gov/resource/76t5-zqzr.json","mapping":{"application":"applicationdate","issue":"issueddate","status":"statuscurrent","type":"permitclassmapped","description":"description","updated":"_updated_at","category":"permitclassmapped","address":"originaladdress1","postal":"originalzip","lat":"latitude","lon":"longitude","valuation":"estprojectcost","contractor_fields":[["contractorcompanyname","contractorcompanyname"]],"verified_company_fields":["contractorcompanyname"]}},
  "austin": {"city":"Austin","dataset":"3syk-w9eu","domain":"https://data.austintexas.gov","date":"issue_date","id":"permit_number","permit":"permit_number","url":"https://data.austintexas.gov/resource/3syk-w9eu.json","mapping":{"application":"application_date","issue":"issue_date","status":"status_current","type":"permit_type","description":"description","updated":"_updated_at","category":"permit_type","address":"permit_location","postal":"zip_code","lat":"latitude","lon":"longitude","valuation":"est_project_cost","contractor_fields":[["contractor_trade","contractor_company_name"]]}}
 }
 class ProbeError(Exception): pass
@@ -49,7 +49,11 @@ def address(row,s):
     return " ".join(text(row.get(x)) for x in m.get("address_parts",[]) if text(row.get(x))) or None
 def contractors(row,s):
     out=[]
+    for field in s["mapping"].get("verified_company_fields",[]):
+        name=text(row.get(field))
+        if name: out.append(name)
     for role_field,name_field in s["mapping"].get("contractor_fields",[]):
+        if role_field == name_field: continue
         role=text(row.get(role_field)); name=text(row.get(name_field))
         if role and name and any(x in role.lower() for x in ("contractor","general","electrical","plumbing","mechanical")): out.append(name)
     return list(dict.fromkeys(out))
@@ -74,7 +78,14 @@ def validate_schema(client,s):
     meta=client.get(f"{s['domain']}/api/views/{s['dataset']}"); names={c.get("fieldName") for c in meta.get("columns",[])}; m=s["mapping"]
     required=[s["id"],s["permit"],s["date"],m.get("status"),m.get("type"),m.get("description")]; missing=[x for x in required if x and x not in names]
     if missing: raise ProbeError(f"schema missing explicit fields: {missing}")
-    s["schema_fields"]=sorted(x for x in names if x); s["schema_metadata_url"]=f"{s['domain']}/api/views/{s['dataset']}"; return meta
+    optional=[]
+    candidates=[m.get(x) for x in ("application","issue","updated","valuation","postal","address","lat","lon")]
+    candidates += m.get("address_parts",[])
+    candidates += [x for pair in m.get("contractor_fields",[]) for x in pair if x]
+    candidates += m.get("verified_company_fields",[])
+    for field in dict.fromkeys(x for x in candidates if x):
+        if field not in names: optional.append(field)
+    s["schema_fields"]=sorted(x for x in names if x); s["schema_metadata_url"]=f"{s['domain']}/api/views/{s['dataset']}"; s["optional_mappings_absent"]=optional; return meta
 def query_city(client,s,since,until,limit,cohort):
     field=s["mapping"]["issue"] if cohort=="issued" else s["mapping"].get("application")
     if not field: raise ProbeError(f"no verified application field for {s['city']}")
@@ -84,7 +95,7 @@ def query_city(client,s,since,until,limit,cohort):
 def identity(row):
     ds=row.get("source_dataset"); rid=row.get("source_record_id")
     if not ds or not rid: raise ProbeError("missing source-scoped identity")
-    return str(ds),str(rid)
+    return str(ds),str(rid),str(row.get("cohort") or "")
 def load_rows(path):
     out={}
     for line in Path(path).read_text(encoding="utf-8").splitlines():
@@ -94,8 +105,12 @@ def load_rows(path):
         out[key]=row
     return out
 def event(kind,key,row,changes=None):
-    body={"event_type":kind,"source_dataset":key[0],"source_record_id":key[1],"changes":changes or {},"record":row if kind=="new" else None}; digest=hashlib.sha256(json.dumps(body,sort_keys=True,separators=(",",":")).encode()).hexdigest()[:20]; body["event_id"]=f"{kind}:{key[0]}:{key[1]}:{digest}"; return body
-def compare(old,new,out):
+    body={"event_type":kind,"source_dataset":key[0],"source_record_id":key[1],"cohort":key[2],"changes":changes or {},"record":row if kind=="new" else None}; digest=hashlib.sha256(json.dumps(body,sort_keys=True,separators=(",",":")).encode()).hexdigest()[:20]; body["event_id"]=f"{kind}:{key[0]}:{key[1]}:{key[2]}:{digest}"; return body
+def compare(old,new,out,old_manifest=None,new_manifest=None):
+    if old_manifest and new_manifest:
+        a_meta=json.loads(Path(old_manifest).read_text(encoding="utf-8")); b_meta=json.loads(Path(new_manifest).read_text(encoding="utf-8"))
+        for key in ("window","configuration"):
+            if a_meta.get(key)!=b_meta.get(key): raise ProbeError(f"incompatible observations: {key} differs")
     a,b=load_rows(old),load_rows(new); events=[]
     for k in sorted(set(b)-set(a)): events.append(event("new",k,b[k]))
     for k in sorted(set(a)&set(b)):
@@ -109,27 +124,31 @@ def csv_text(rows):
 def run_live(args):
     observed=datetime.now(timezone.utc); end=date.fromisoformat(args.until) if args.until else observed.date(); start=date.fromisoformat(args.since) if args.since else end-timedelta(days=30)
     if start>end: raise ProbeError("since must not be after until")
-    c=Client(args.retries); stamp=observed.strftime("%Y%m%dT%H%M%SZ"); root=Path(args.out).parent; snap=root/"snapshots"/stamp; baseline=root/"baselines"; rows=[]; manifest={"observed_at":observed.isoformat(),"window":{"since":str(start),"until":str(end),"timezone":"UTC","semantics":"inclusive whole UTC dates"},"cities":{},"cohorts":{},"resource":{}}
+    c=Client(args.retries); stamp=observed.strftime("%Y%m%dT%H%M%SZ"); root=Path(args.out).parent; snap=root/"snapshots"/stamp; baseline=root/"baselines"; previous=root/"previous"; rows=[]; manifest={"observed_at":observed.isoformat(),"window":{"since":str(start),"until":str(end),"timezone":"UTC","semantics":"inclusive whole UTC dates"},"configuration":{"cities":list(args.cities),"limit":min(100,args.limit),"seattle_application_sample":bool(args.seattle_in_progress)},"cities":{},"cohorts":{},"resource":{}}
     for name in args.cities:
         s=SOURCES[name]; t=time.monotonic(); city_rows=[]; status={"status":"failed","records_returned":0,"errors":[]}
         try:
-            validate_schema(c,s); cohorts=["issued","in_progress"] if name=="seattle" and args.seattle_in_progress else ["issued"]
+            validate_schema(c,s); cohorts=["issued","application_date_sample"] if name=="seattle" and args.seattle_in_progress else ["issued"]
             for cohort in cohorts:
                 raw,n,where,order=query_city(c,s,start,end,args.limit,cohort); normalized=[normalize(x,s,observed.isoformat()) for x in raw]
                 for x in normalized: x["cohort"]=cohort
+                cohort_keys=[identity(x) for x in normalized]
+                if len(cohort_keys)!=len(set(cohort_keys)): raise ProbeError(f"duplicate identity within cohort: {cohort}")
                 atom_write(snap/name/f"{cohort}_raw.jsonl","".join(json.dumps(x,ensure_ascii=False)+"\n" for x in raw)); manifest["cohorts"][f"{name}:{cohort}"]={"records_returned":len(normalized),"full_window_count":n,"where":where,"order":order}
                 city_rows += normalized
-            keys=[identity(x) for x in city_rows]
-            if len(keys)!=len(set(keys)): raise ProbeError("duplicate source-scoped identity in city result")
             status["records_returned"]=len(city_rows); status["status"]="verified_empty" if not city_rows and all(manifest["cohorts"][f"{name}:{x}"]["full_window_count"]==0 for x in cohorts) else "success"
-            atom_write(snap/name/"normalized.jsonl","".join(json.dumps(x,ensure_ascii=False)+"\n" for x in city_rows)); atom_write(snap/name/"normalized.csv",csv_text(city_rows)); atom_write(baseline/f"{name}.jsonl","".join(json.dumps(x,ensure_ascii=False)+"\n" for x in city_rows)); rows += city_rows
+            city_dir=snap/name; atom_write(city_dir/"normalized.jsonl","".join(json.dumps(x,ensure_ascii=False)+"\n" for x in city_rows)); atom_write(city_dir/"normalized.csv",csv_text(city_rows))
+            old=baseline/f"{name}.jsonl"; prev=previous/f"{name}.jsonl"; manifest["cities"][name]={"status":status["status"],"records_returned":status["records_returned"],"errors":[],"previous_baseline":str(prev) if old.exists() else None,"current_snapshot":str(city_dir/"normalized.jsonl"),"optional_mappings_absent":s.get("optional_mappings_absent",[])}
+            if old.exists(): atom_write(prev,old.read_text(encoding="utf-8"))
+            atom_write(old,"".join(json.dumps(x,ensure_ascii=False)+"\n" for x in city_rows)); rows += city_rows
         except Exception as e: status["errors"]=[str(e)]
-        status["elapsed_seconds"]=round(time.monotonic()-t,3); manifest["cities"][name]=status
+        status["elapsed_seconds"]=round(time.monotonic()-t,3)
+        if name not in manifest["cities"]: manifest["cities"][name]=status
     manifest["resource"]={"requests":c.requests,"retries":c.retries_used,"bytes_received":c.bytes,"errors":c.errors}; manifest["complete"]=all(x["status"] in ("success","verified_empty") for x in manifest["cities"].values())
-    if rows: atom_write(args.out,csv_text(rows)); atom_write(Path(args.out).with_suffix(".jsonl"),"".join(json.dumps(x,ensure_ascii=False)+"\n" for x in rows))
+    atom_write(args.out,csv_text(rows)); atom_write(Path(args.out).with_suffix(".jsonl"),"".join(json.dumps(x,ensure_ascii=False)+"\n" for x in rows)); manifest["aggregate_status"]="complete" if manifest["complete"] else "incomplete"
     atom_write(snap/"manifest.json",json.dumps(manifest,indent=2)+"\n"); atom_write(root/"run_metrics.json",json.dumps(manifest,indent=2)+"\n"); print(json.dumps(manifest,indent=2)); return 0 if manifest["complete"] else 2
 def main():
-    p=argparse.ArgumentParser(); sub=p.add_subparsers(dest="cmd",required=True); l=sub.add_parser("live"); l.add_argument("--cities",nargs="+",choices=SOURCES,default=list(SOURCES)); l.add_argument("--limit",type=int,default=100); l.add_argument("--retries",type=int,default=2); l.add_argument("--since"); l.add_argument("--until"); l.add_argument("--seattle-in-progress",action="store_true"); l.add_argument("--out",default="outputs/live.csv"); l.set_defaults(func=run_live); c=sub.add_parser("compare"); c.add_argument("old"); c.add_argument("new"); c.add_argument("--out",default="outputs/events.jsonl"); c.set_defaults(func=lambda a:(print(json.dumps({"events":len(compare(a.old,a.new,a.out)),"output":a.out},indent=2)) or 0)); a=p.parse_args()
+    p=argparse.ArgumentParser(); sub=p.add_subparsers(dest="cmd",required=True); l=sub.add_parser("live"); l.add_argument("--cities",nargs="+",choices=SOURCES,default=list(SOURCES)); l.add_argument("--limit",type=int,default=100); l.add_argument("--retries",type=int,default=2); l.add_argument("--since"); l.add_argument("--until"); l.add_argument("--seattle-in-progress",action="store_true",help="also collect a separate application_date_sample; not an in-progress predicate"); l.add_argument("--out",default="outputs/live.csv"); l.set_defaults(func=run_live); c=sub.add_parser("compare"); c.add_argument("old"); c.add_argument("new"); c.add_argument("--out",default="outputs/events.jsonl"); c.add_argument("--old-manifest"); c.add_argument("--new-manifest"); c.set_defaults(func=lambda a:(print(json.dumps({"events":len(compare(a.old,a.new,a.out,a.old_manifest,a.new_manifest)),"output":a.out},indent=2)) or 0)); a=p.parse_args()
     try: raise SystemExit(a.func(a))
     except ProbeError as e: print(f"error: {e}",file=sys.stderr); raise SystemExit(2)
 if __name__=="__main__": main()
