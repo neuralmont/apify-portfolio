@@ -21,6 +21,10 @@ class BillingDeliveryError(RuntimeError):
     """A dataset push failed; the SDK may have retried it already."""
 
 
+class BillingConfigurationError(RuntimeError):
+    """The SDK pricing state or ChargeResult is unusable."""
+
+
 @dataclass(frozen=True)
 class DeliveryResult:
     delivered_count: int
@@ -29,18 +33,24 @@ class DeliveryResult:
 
 
 def _is_pay_per_event(actor: Any) -> bool:
-    """Support PPE and the unmonetized private Actor during the transition."""
+    """Read pricing state without hiding a broken charging manager."""
     try:
-        pricing = actor.get_charging_manager().get_pricing_info()
-        return bool(getattr(pricing, "is_pay_per_event", False))
-    except (AttributeError, TypeError, RuntimeError):
-        return False
-
-
-def _charge_result_value(result: Any, name: str, default: Any) -> Any:
-    if result is None:
-        return default
-    return getattr(result, name, default)
+        manager = actor.get_charging_manager()
+    except Exception as exc:
+        raise BillingConfigurationError(
+            "pricing mode unavailable; the Apify charging manager could not be read"
+        ) from exc
+    try:
+        pricing = manager.get_pricing_info()
+    except Exception as exc:
+        raise BillingConfigurationError(
+            "pricing mode unavailable; get_pricing_info failed"
+        ) from exc
+    if pricing is None or not hasattr(pricing, "is_pay_per_event"):
+        raise BillingConfigurationError(
+            "pricing mode unavailable; pricing info lacks is_pay_per_event"
+        )
+    return bool(pricing.is_pay_per_event)
 
 
 async def push_permit(actor: Any, record: dict[str, Any]) -> DeliveryResult:
@@ -50,15 +60,28 @@ async def push_permit(actor: Any, record: dict[str, Any]) -> DeliveryResult:
     atomic shortcut: the item is not pushed over the user's spending limit,
     and the returned ChargeResult tells us whether the limit was reached.
     """
+    ppe = _is_pay_per_event(actor)
     try:
-        if _is_pay_per_event(actor):
+        if ppe:
             charge_result = await actor.push_data(record, charged_event_name=PERMIT_EVENT_NAME)
-            charged_count = int(_charge_result_value(charge_result, "charged_count", 1))
-            limit_reached = bool(_charge_result_value(charge_result, "event_charge_limit_reached", False))
+            if charge_result is None or not hasattr(charge_result, "charged_count") or not hasattr(charge_result, "event_charge_limit_reached"):
+                raise BillingConfigurationError(
+                    "PPE push_data returned an incomplete ChargeResult"
+                )
+            charged_count = charge_result.charged_count
+            limit_reached = charge_result.event_charge_limit_reached
+            if isinstance(charged_count, bool) or not isinstance(charged_count, int) or charged_count < 0:
+                raise BillingConfigurationError("PPE ChargeResult.charged_count is invalid")
+            if not isinstance(limit_reached, bool):
+                raise BillingConfigurationError("PPE ChargeResult.event_charge_limit_reached is invalid")
+            if charged_count > 1:
+                raise BillingConfigurationError("one permit push charged more than one event")
             if charged_count <= 0:
                 return DeliveryResult(0, 0, limit_reached)
             return DeliveryResult(1, charged_count, limit_reached)
         await actor.push_data(record)
         return DeliveryResult(1, 0, False)
+    except BillingConfigurationError:
+        raise
     except Exception as exc:  # SDK errors are persisted by the caller.
         raise BillingDeliveryError(f"permit delivery failed: {exc}") from exc

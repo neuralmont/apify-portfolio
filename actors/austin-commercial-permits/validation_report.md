@@ -118,6 +118,14 @@ The proposed price is `$0.003` per delivered permit record. The implementation u
 
 The proposed Console setup, listing metadata, tutorial, and 30-day measurement plan are in `PRICING_CONFIGURATION.md`, `LISTING_METADATA.md`, `TUTORIAL.md`, and `LAUNCH_MEASUREMENT_PLAN.md`. The four prior benchmark runs remain operational tests and are excluded from customer metrics.
 
+## Billing verification
+
+At commit `12fd8cc243450f7fa56820b8cb9b318e72816739`, the focused suite passed 20/20 tests. It covers explicit unmonetized delivery, sufficient PPE budget, partial spending-limit delivery, exact-budget delivery, malformed or unavailable pricing state, preservation of extraction errors, delivered-field completeness, dataset/summary reconciliation, and no blind retry of an ambiguous push.
+
+The implementation now treats pricing-manager failures as billing configuration failures instead of silently switching to free delivery. PPE pushes require a non-null `ChargeResult` with valid `charged_count` and `event_charge_limit_reached` fields. It distinguishes `requested_result_completion` from `full_window_coverage`; an exact-budget final requested record remains requested-result complete while a partial budget stop remains incomplete but exits gracefully. Delivered-field completeness and contractor summaries are recalculated from actually delivered records.
+
+The actual installed Apify SDK PPE test could not be completed in this environment. The declared requirement is `apify>=3.0.0,<5`, but the package index exposed no version in that range. The newest available `apify==2.7.3` was installed in an isolated temporary environment, but importing it failed because its resolved `browserforge`/`crawlee` dependency set raised `AttributeError: module 'browserforge.download' has no attribute 'DATA_FILES'`. No SDK version or `$1` local charging-log reconciliation is claimed. See `evidence/billing_verification_20261006.json` for the sanitized command outcome. Apify documents that local PPE test events default to `$1`; that mode would not verify the proposed `$0.003` Console price.
+
 ## Remaining limitations
 
 This beta covers only issued permits in Austin’s dataset. It does not identify unissued applications or guarantee current publication timing. The Actor preserves source classification and does not infer it from addresses or descriptions. Missing valuations and coordinates remain missing. Contractor summaries group exact source company/trade values and count delivered permit records, not distinct projects. Customer billing, publishing, and scheduling remain disabled; no enrichment was added.

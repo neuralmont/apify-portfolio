@@ -7,10 +7,11 @@ This document prepares the private Actor for a future paid beta. It does not ena
 1. Open the private Actor's monetization setup in Apify Console.
 2. Select **Pay per event** and define the custom primary event `permit-record`.
 3. Set the event title to **Delivered permit record**, describe it as one permit record written to the default dataset, and set the price to `$0.003`.
-4. Remove or set the price of the synthetic `apify-default-dataset-item` event to zero so the same default-dataset row is not billed a second time. Keep the recommended `apify-actor-start` event only if its Console setup is accepted for the beta.
-5. Enable **Pay per event + usage** only when the release owner approves passing platform usage through to customers. This is a pricing setting, not an Actor-code setting.
-6. Set the minimum customer run limit high enough to cover one `permit-record` event and the intended start-event policy. Confirm the Console's `minimalMaxTotalChargeUsd` value before activation.
-7. Leave the Actor private and charging disabled until the checklist in `LAUNCH_READINESS.md` is signed off.
+4. Remove the synthetic `apify-default-dataset-item` event, or set its price to zero, so the same default-dataset row is not billed a second time.
+5. Keep **Pay per event + usage OFF**. Platform usage is included in the proposed `$0.003` event price; turning this option on would pass usage charges through to customers and would not match this beta configuration.
+6. Remove or disable any `apify-actor-start` event for this initial beta; there is no additional start fee in the proposal.
+7. Set the minimum customer run limit to cover one `permit-record` event (`$0.003`) and confirm the Console's `minimalMaxTotalChargeUsd` value before activation.
+8. Leave the Actor private and charging disabled until the checklist in `LAUNCH_READINESS.md` is signed off.
 
 The Actor code calls the official Python SDK shortcut:
 

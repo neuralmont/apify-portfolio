@@ -16,7 +16,7 @@ The contractor summary groups the exact source company and trade values found in
 
 ## Pricing
 
-Proposed paid-beta pricing is `$0.003` per delivered permit record (`$3 per 1,000`). Only visible permit records use the `permit-record` pay-per-event. Source counts, discarded duplicates, diagnostics, and contractor-summary rows are not charged. Platform usage is configured as included in the PPE setup. Customer spending limits can stop a run after a partial delivery; `RUN_SUMMARY` preserves the delivered count and reason.
+Proposed paid-beta pricing is `$0.003` per delivered permit record (`$3 per 1,000`). Only visible permit records use the `permit-record` pay-per-event. Source counts, discarded duplicates, diagnostics, and contractor-summary rows are not charged. Platform usage is included in this proposed price: keep Apify's **Pay per event + usage** option OFF. There is no additional start fee for this initial beta. Customer spending limits can stop a run after a partial delivery; `RUN_SUMMARY` preserves the delivered count and reason.
 
 Pricing is prepared but customer charging remains disabled while this Actor is private. See [PRICING_CONFIGURATION.md](PRICING_CONFIGURATION.md) for the review checklist; do not enable it until the release checklist is approved.
 

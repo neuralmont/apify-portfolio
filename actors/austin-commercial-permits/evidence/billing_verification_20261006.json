@@ -1,0 +1,35 @@
+{
+  "repository_commit": "12fd8cc243450f7fa56820b8cb9b318e72816739",
+  "focused_tests": {
+    "command": "python3 -m unittest discover -v actors/austin-commercial-permits/tests",
+    "passed": 20,
+    "failed": 0,
+    "scenarios": [
+      "explicit unmonetized delivery",
+      "sufficient PPE budget",
+      "partial spending-limit delivery",
+      "exact-budget delivery",
+      "pricing-manager failure",
+      "malformed PPE ChargeResult",
+      "extraction failure preserved with spending limit",
+      "ambiguous push is not blindly retried"
+    ]
+  },
+  "sdk_verification": {
+    "declared_requirement": "apify>=3.0.0,<5",
+    "normal_environment_import": "blocked: apify module is not installed",
+    "package_index_attempt": "blocked: no apify version >=3.0.0 was available",
+    "newest_available_attempt": "apify 2.7.3",
+    "newest_available_import": "blocked by dependency error: browserforge.download has no DATA_FILES when importing crawlee",
+    "local_ppe_mode": "not run against the actual SDK because the compatible declared SDK could not be imported",
+    "important_pricing_note": "Apify local PPE charging-log events default to $1; this evidence does not verify the proposed $0.003 Console price"
+  },
+  "configuration_review": {
+    "permit_record_price_usd": 0.003,
+    "platform_usage_pass_through": false,
+    "synthetic_default_dataset_item": "remove or set to zero",
+    "synthetic_start_fee": "disabled for initial beta",
+    "customer_charging_enabled": false,
+    "actor_private": true
+  }
+}

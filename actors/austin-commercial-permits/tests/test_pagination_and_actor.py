@@ -114,6 +114,10 @@ class ActorOutputTests(unittest.TestCase):
             async def __aenter__(self): return self
             async def __aexit__(self, *args): return False
             async def get_input(self): return {"startDate":"2026-10-01", "endDate":"2026-10-06"}
+            class Manager:
+                class Pricing: is_pay_per_event = False
+                def get_pricing_info(self): return self.Pricing()
+            def get_charging_manager(self): return self.Manager()
             async def push_data(self, item): pushed.append(item)
             async def set_value(self, key, value): values[key] = value
 
@@ -134,14 +138,14 @@ class ActorOutputTests(unittest.TestCase):
         self.assertNotIn("contractor-summary", values)
         self.assertEqual(len(pushed), 1)
 
-    def _run_billing_actor(self, fake_actor, records):
+    def _run_billing_actor(self, fake_actor, records, summary_errors=None):
         original_actor = actor_main.Actor
         original_run = actor_main.run_extraction
         actor_main.Actor = fake_actor
         actor_main.run_extraction = lambda data: {
             "records": records,
             "contractor_summary": [{"contractor_name_original": "Acme Builders LLC", "delivered_permit_count": 1}],
-            "summary": {"completion": "complete", "errors": []},
+            "summary": {"completion": "complete", "errors": list(summary_errors or []), "pagination_complete": True, "cap_truncated": False},
             "schema": {"verified_fields": []},
         }
         try:
@@ -179,6 +183,7 @@ class ActorOutputTests(unittest.TestCase):
         self.assertEqual([call[1]["charged_event_name"] for call in fake.pushes], ["permit-record", "permit-record"])
         self.assertEqual(fake.values["RUN_SUMMARY"]["billing"]["charged_records"], 2)
         self.assertEqual(fake.values["RUN_SUMMARY"]["billing"]["summary_rows_charged"], 0)
+        self.assertEqual(sum(item["delivered_permit_count"] for item in fake.values["CONTRACTOR_SUMMARY"]), 2)
 
     def test_customer_limit_preserves_partial_delivery_and_stops_cleanly(self):
         class ChargeResult:
@@ -215,6 +220,87 @@ class ActorOutputTests(unittest.TestCase):
         self.assertIn("spending limit", summary["errors"][0])
         self.assertEqual(summary["billing"]["summary_rows_charged"], 0)
         self.assertEqual(fake.values["CONTRACTOR_SUMMARY"][0]["contractor_name_original"], "Delivered Co")
+
+    def test_exact_budget_delivery_remains_requested_result_complete(self):
+        class ChargeResult:
+            charged_count = 1
+            event_charge_limit_reached = True
+        class Pricing: is_pay_per_event = True
+        class Manager:
+            def get_pricing_info(self): return Pricing()
+        class FakeActor:
+            def __init__(self): self.values = {}; self.exit_called = False
+            async def __aenter__(self): return self
+            async def __aexit__(self, *args): return False
+            async def get_input(self): return {"startDate":"2026-10-01", "endDate":"2026-10-06"}
+            def get_charging_manager(self): return Manager()
+            async def push_data(self, item, **kwargs): return ChargeResult()
+            async def set_value(self, key, value): self.values[key] = value
+            async def exit(self, **kwargs): self.exit_called = True
+        fake = FakeActor()
+        self._run_billing_actor(fake, [{"source_record_id": "A-1", "contractor_name": "Exact Budget Co", "contractor_trade": "General Contractor", "issue_date": "2026-10-01"}])
+        summary = fake.values["RUN_SUMMARY"]
+        self.assertTrue(fake.exit_called)
+        self.assertEqual(summary["completion"], "complete")
+        self.assertEqual(summary["requested_result_completion"], "complete")
+        self.assertTrue(summary["full_window_coverage"])
+        self.assertEqual(summary["errors"], [])
+        self.assertIn("warnings", summary)
+
+    def test_spending_limit_does_not_hide_extraction_failure(self):
+        class ChargeResult:
+            charged_count = 1
+            event_charge_limit_reached = True
+        class Pricing: is_pay_per_event = True
+        class Manager:
+            def get_pricing_info(self): return Pricing()
+        class FakeActor:
+            def __init__(self): self.values = {}; self.exit_called = False
+            async def __aenter__(self): return self
+            async def __aexit__(self, *args): return False
+            async def get_input(self): return {"startDate":"2026-10-01", "endDate":"2026-10-06"}
+            def get_charging_manager(self): return Manager()
+            async def push_data(self, item, **kwargs): return ChargeResult()
+            async def set_value(self, key, value): self.values[key] = value
+            async def exit(self, **kwargs): self.exit_called = True
+        fake = FakeActor()
+        self._run_billing_actor(fake, [{"source_record_id": "A-1"}], ["source page failed after delivered row"])
+        summary = fake.values["RUN_SUMMARY"]
+        self.assertTrue(fake.exit_called)
+        self.assertEqual(summary["completion"], "incomplete")
+        self.assertIn("source page failed", summary["errors"][0])
+
+    def test_pricing_manager_failure_is_diagnostic_and_fails(self):
+        class FakeActor:
+            def __init__(self): self.values = {}; self.pushes = 0
+            async def __aenter__(self): return self
+            async def __aexit__(self, *args): return False
+            async def get_input(self): return {"startDate":"2026-10-01", "endDate":"2026-10-06"}
+            def get_charging_manager(self): raise RuntimeError("manager unavailable")
+            async def push_data(self, item, **kwargs): self.pushes += 1
+            async def set_value(self, key, value): self.values[key] = value
+        fake = FakeActor()
+        with self.assertRaises(Exception):
+            self._run_billing_actor(fake, [{"source_record_id": "A-1"}])
+        self.assertEqual(fake.pushes, 0)
+        self.assertIn("pricing mode unavailable", fake.values["RUN_SUMMARY"]["errors"][0])
+
+    def test_missing_ppe_charge_result_is_diagnostic_and_fails(self):
+        class Pricing: is_pay_per_event = True
+        class Manager:
+            def get_pricing_info(self): return Pricing()
+        class FakeActor:
+            def __init__(self): self.values = {}
+            async def __aenter__(self): return self
+            async def __aexit__(self, *args): return False
+            async def get_input(self): return {"startDate":"2026-10-01", "endDate":"2026-10-06"}
+            def get_charging_manager(self): return Manager()
+            async def push_data(self, item, **kwargs): return None
+            async def set_value(self, key, value): self.values[key] = value
+        fake = FakeActor()
+        with self.assertRaises(Exception):
+            self._run_billing_actor(fake, [{"source_record_id": "A-1"}])
+        self.assertIn("incomplete ChargeResult", fake.values["RUN_SUMMARY"]["errors"][0])
 
     def test_transport_failure_is_not_blindly_retried_or_double_charged(self):
         class Pricing: is_pay_per_event = True

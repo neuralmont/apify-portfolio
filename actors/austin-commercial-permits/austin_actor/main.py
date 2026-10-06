@@ -1,7 +1,7 @@
 from __future__ import annotations
 import asyncio
-from .billing import BillingDeliveryError, push_permit
-from .core import ExtractionError, contractor_summary, run_extraction
+from .billing import BillingConfigurationError, BillingDeliveryError, push_permit
+from .core import ExtractionError, completeness, contractor_summary, run_extraction
 
 try:
     from apify import Actor
@@ -22,9 +22,13 @@ async def main() -> None:
         delivered_records = []
         billing_limit_reached = False
         delivery_error = None
+        billing_error = None
         for record in result["records"]:
             try:
                 delivery = await push_permit(Actor, record)
+            except BillingConfigurationError as exc:
+                billing_error = str(exc)
+                break
             except BillingDeliveryError as exc:
                 delivery_error = str(exc)
                 break
@@ -38,6 +42,14 @@ async def main() -> None:
 
         summary = result["summary"]
         summary["records_delivered"] = delivered
+        extraction_ok = not summary.get("errors")
+        summary["requested_result_completion"] = "complete" if delivered == len(result["records"]) and extraction_ok and not delivery_error and not billing_error else "incomplete"
+        summary["full_window_coverage"] = bool(
+            summary.get("pagination_complete")
+            and not summary.get("cap_truncated")
+            and summary["requested_result_completion"] == "complete"
+        )
+        summary["field_completeness"] = completeness(delivered_records)
         summary["billing"] = {
             "event_name": "permit-record",
             "price_usd": 0.003,
@@ -50,9 +62,16 @@ async def main() -> None:
         if delivery_error:
             summary["completion"] = "incomplete"
             summary.setdefault("errors", []).append(delivery_error)
-        elif billing_limit_reached:
+        if billing_error:
             summary["completion"] = "incomplete"
-            summary.setdefault("errors", []).append("customer spending limit reached; delivery stopped")
+            summary.setdefault("errors", []).append(billing_error)
+        elif billing_limit_reached:
+            limit_message = "customer spending limit reached; delivery stopped"
+            if summary["requested_result_completion"] != "complete":
+                summary["completion"] = "incomplete"
+                summary.setdefault("errors", []).append(limit_message)
+            else:
+                summary.setdefault("warnings", []).append(limit_message)
         if data["includeContractorSummary"]:
             await Actor.set_value(
                 "CONTRACTOR_SUMMARY",
@@ -60,6 +79,8 @@ async def main() -> None:
             )
         await Actor.set_value("RUN_SUMMARY", summary)
         await Actor.set_value("SCHEMA_METADATA", result["schema"])
+        if billing_error:
+            raise ExtractionError("Billing configuration failure; see RUN_SUMMARY")
         if billing_limit_reached and hasattr(Actor, "exit"):
             await Actor.exit(status_message="Customer spending limit reached; delivered records are preserved")
             return
