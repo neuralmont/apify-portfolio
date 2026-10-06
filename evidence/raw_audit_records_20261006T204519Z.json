@@ -1,0 +1,22 @@
+{
+  "observation": "outputs/snapshots/20261006T204519Z",
+  "note": "Sanitized source-shaped records selected from saved raw JSONL. Personal names, phone numbers, emails, and contact addresses omitted.",
+  "austin": [
+    {"permit_number":"2018-005770 PP","permittype":"PP","permit_class_mapped":"Residential","permit_location":"4004 RIDGELEA DR","description":"Replace existing corroded water yard line.","total_job_valuation":null,"status_current":"Active","contractor_trade":"Plumbing Contractor","contractor_company_name_present":true},
+    {"permit_number":"2023-136138 BP","permittype":"BP","permit_class_mapped":"Residential","permit_location":"2218 HASKELL ST","description":"New pool","total_job_valuation":"1","status_current":"Active","contractor_trade":"General Contractor","contractor_company_name_present":true},
+    {"permit_number":"2025-143684 BP","permittype":"BP","permit_class_mapped":"Commercial","permit_location":"2400 S CONGRESS AVE","description":"Adding a Ramp to Interior Area for Staff Personal for Existing Grocery Store","total_job_valuation":null,"status_current":"Active","contractor_trade":"General Contractor","contractor_company_name_present":true},
+    {"permit_number":"2025-143827 BP","permittype":"BP","permit_class_mapped":"Commercial","permit_location":"2904 PALM WAY UNIT FLR1","description":"Convert existing security briefing room and storage room into business space","total_job_valuation":null,"status_current":"Active","contractor_trade":"General Contractor","contractor_company_name_present":true},
+    {"permit_number":"2025-149928 MP","permittype":"MP","permit_class_mapped":"Commercial","permit_location":"10037 MENCHACA RD BLDG 1","description":"Commercial expedited review - renovation and addition to existing warehouse structure","total_job_valuation":null,"status_current":"Active","contractor_trade":"Mechanical Contractor","contractor_company_name_present":true}
+  ],
+  "chicago_conflicts": [
+    {"id":"3342274","street_number":"1463","street_direction":"W","street_name":"MONTROSE AVE","work_description":"Commercial space with restaurant and new dwelling units","reported_cost":"87000"},
+    {"id":"3433168","street_number":"6411","street_direction":"S","street_name":"CENTRAL AVE","work_description":"Convert former office/firehouse into a single-family residence","reported_cost":null},
+    {"id":"3439955","street_number":"3545","street_direction":"W","street_name":"BELMONT AVE","work_description":"Convert commercial space in mixed-use building to a dwelling unit","reported_cost":null},
+    {"id":"3443901","street_number":"","street_direction":"","street_name":"","work_description":"New mixed-use building with office, retail, and residential units","reported_cost":null},
+    {"id":"N2983385","street_number":"","street_direction":"","street_name":"","work_description":"Residential and non-residential plumbing fixtures","reported_cost":null}
+  ],
+  "seattle": [
+    {"permitnum":"7008820-CN","permitclassmapped":"Non-Residential","originaladdress1":"1409 NE 80TH ST","description":"Storage container for seating area at eating/drinking establishment","estprojectcost":"25000.0000","statuscurrent":"Issued","contractorcompanyname_present":false},
+    {"permitnum":"7164859-RR","permitclassmapped":"Residential","originaladdress1":null,"description":"Replace composition shingles","estprojectcost":null,"statuscurrent":"Issued","contractorcompanyname_present":true}
+  ]
+}

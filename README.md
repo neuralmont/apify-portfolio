@@ -6,6 +6,7 @@ This is a reproducible, bounded probe—not an Actor, lead qualifier, dashboard,
 
 ```bash
 python3 -m unittest discover -s tests -v
+python3 audit_saved.py outputs/snapshots/<timestamp> > /tmp/permit-audit.json
 END=$(date -u +%F); START=$(date -u -v-30d +%F)
 python3 probe.py live --cities chicago seattle austin --limit 100 --since "$START" --until "$END" --seattle-in-progress --out outputs/live.csv
 python3 probe.py compare outputs/previous/chicago.jsonl outputs/snapshots/<timestamp>/chicago/normalized.jsonl --old-manifest outputs/snapshots/<previous>/manifest.json --new-manifest outputs/snapshots/<timestamp>/manifest.json --out outputs/events.jsonl

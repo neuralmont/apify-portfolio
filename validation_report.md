@@ -1,21 +1,29 @@
 # Validation report
 
-Observation date: 2026-10-06 (America/Chicago). A manual macOS Terminal run reached all three official sources and saved `outputs/snapshots/20261006T202655Z/`. Codex’s ordinary execution environment remains unable to resolve the hosts, so no second live run was attempted here. The saved observation is the live evidence used below.
+Observation date: 2026-10-06 (America/Chicago). The newest manual macOS Terminal run saved `outputs/snapshots/20261006T204519Z/`. Codex’s ordinary execution environment remains unable to resolve the hosts; the local observation is the live evidence used below.
 
 ## Saved live observation
 
-The manifest reports Chicago `success` with 100 issued rows and a full-window count of 3,032; Seattle issued `success` with 100 rows and a full-window count of 451; Seattle’s optional `applicationdate` cohort returned HTTP 400; Austin stopped at schema validation because the prior `permit_type` mapping was absent. Chicago saved `issued_raw.jsonl`, `normalized.jsonl`, and `normalized.csv`. Seattle saved only `issued_raw.jsonl`: its issued query completed, but the old all-or-nothing city path did not persist normalized issued output before the optional cohort failure. Austin saved no sample. The corrected code now persists each successful cohort before continuing to an optional cohort and captures bounded HTTP 400 bodies without retrying the same request.
+The newest manifest reports Chicago `success` with 100 issued rows and a full-window count of 3,032; Seattle `success` with 100 issued rows (count 451) plus 100 `application_date_sample` rows (count 453); and Austin `success` with 100 issued rows (count 4,770). All requested cohorts succeeded, so the aggregate is complete. The run used 11 requests, 0 retries, and 992,594 bytes. The saved manifest did not record wall-clock elapsed time, so none is inferred.
 
-The raw saved records corrected the mappings: Chicago has `contact_1_type/name` through `contact_9_type/name` in the sample, not `contractor_N_*`; Seattle has `contractorcompanyname` on 8 of 100 issued records; Austin’s official schema uses `permittype`, `permit_class_mapped`, `permit_location`, `total_job_valuation`, `status_current`, `contractor_trade`, and `contractor_company_name`. The Austin and Chicago/Seattle metadata references are recorded in [source_inventory.md](source_inventory.md).
+The raw saved records confirm the mappings: Chicago has `contact_1_type/name` through `contact_9_type/name`, Seattle has `contractorcompanyname`, and Austin uses `permittype`, `permit_class_mapped`, `permit_location`, `total_job_valuation`, `status_current`, `contractor_trade`, and `contractor_company_name`. The Austin and Chicago/Seattle metadata references are recorded in [source_inventory.md](source_inventory.md).
 
-Measured sample quality and 10-record audits are in [evidence/live_quality_20261006T202655Z.json](evidence/live_quality_20261006T202655Z.json). Counts are full-window API counts; completeness and classification counts are only the deterministic latest-100 samples:
+Reproducible statistics are calculated by `python3 audit_saved.py outputs/snapshots/20261006T204519Z`. The sanitized results and Austin 10-record audit are in [evidence/live_quality_20261006T204519Z.json](evidence/live_quality_20261006T204519Z.json); selected source-shaped, contact-redacted records are in [raw_audit_records_20261006T204519Z.json](evidence/raw_audit_records_20261006T204519Z.json). Counts are full-window API counts; completeness and classification counts are only deterministic 100-record samples:
 
 | Sample | Classification | Address | Description | Valuation | Contractor | Other |
 |---|---:|---:|---:|---:|---:|---|
-| Chicago issued n=100 | commercial 11, residential 25, unknown 64 | 100% | 100% | 96% | 99% | postal 0%, status 74%, coordinates 99% |
-| Seattle issued n=100 | commercial 27, residential 73, unknown 0 | 100% | 100% | 100% | 8% | postal 88%, status/coordinates 100% |
+| Chicago issued n=100 | commercial 6, residential 27, unknown 67 | 100% | 100% | 96% | 99% overall / 100% commercial | postal 0%, status 74%, coordinates 99% |
+| Seattle issued n=100 | commercial 27, residential 73, unknown 0 | 100% | 100% | 100% | 8% overall / 4% commercial | postal 88%, status/coordinates 100% |
+| Seattle application-date n=100 | commercial 22, residential 78, unknown 0 | 100% | 100% | 100% | 0% overall / 0% commercial | postal 77%, status/coordinates 100% |
+| Austin issued n=100 | commercial 36, residential 64, unknown 0 | 100% | 100% | 8% | 88% overall / 78% commercial | postal 0%, status/coordinates 70% |
 
-Chicago classification is heuristic work-description evidence because the source does not provide an explicit commercial/residential category in the mapped fields. Seattle classification is source-provided `permitclassmapped`. These samples are not representative yield estimates and do not establish lead quality, purchase intent, or equipment need.
+Chicago classification is heuristic work-description evidence because the source does not provide an explicit commercial/residential category in the mapped fields. Five records with conflicting commercial/residential cues (`3342274`, `3433168`, `3439955`, `3443901`, `N2983385`) are now `unknown` with ambiguity evidence. Seattle and Austin classifications are source-provided category fields. Contractor completeness is shown both overall and within commercial-classified records; contact names are retained only for source-supported contractor roles/company fields, not owners or unrelated roles. These samples are not representative yield estimates and do not establish lead quality, purchase intent, or equipment need.
+
+## City recommendations
+
+- Chicago: retain as a secondary source. It has 99% contractor-field completeness overall and 100% among the six commercial-classified sample rows, but no postal values, no source classification field in this mapping, and five ambiguous mixed-use/conflict records.
+- Seattle: retain issued permits as a useful classification source, but contractor availability is weak (1/27 commercial issued rows). The application-date sample is useful as a separate cohort, not evidence of unissued/in-progress status.
+- Austin: strongest contractor coverage in this observation (28/36 commercial rows), but valuation completeness is only 8%, postal is 0%, and coordinates are 70%. Keep for future repeated observations, with those limitations explicit.
 
 Exact macOS Terminal rerun commands:
 
@@ -40,7 +48,7 @@ The comparator emits deterministic `new` and `changed` events for status, valuat
 
 ## Quality questions to answer after live run
 
-- The saved Chicago and Seattle samples have ten-record mapping/classification audits in the evidence artifact; they are checks against source-shaped raw fields, not independent permit adjudication.
+- The saved Chicago, Seattle, and Austin samples have ten-record mapping/classification audits in the evidence artifact; they are checks against source-shaped raw fields, not independent permit adjudication.
 - Compare counts by application date, issue date, and status where fields support it.
 - Count contractor names and distinguish business names from individual names.
 - Inspect repeated addresses and source project/related-permit fields; do not merge on address alone.
@@ -55,4 +63,4 @@ No current Apify pricing was verified in this offline run, so no dollar estimate
 
 ## Recommendation
 
-**Narrow.** Chicago and Seattle provide usable issued-permit inputs in this observation, with materially different contractor completeness and classification evidence. Austin and Seattle’s application cohort still require a corrected live run. The bounded extraction mechanics are technically feasible, but source quality, freshness, repeated-change capture, and customer demand remain unvalidated. This is not a technical go and is not proof of demand.
+**Narrow.** Chicago, Seattle, and Austin all produced bounded issued cohorts in the newest observation. Seattle’s issued sample has low contractor availability (8% overall; 1/27 commercial), while Austin has stronger contractor availability (88% overall; 28/36 commercial) but only 8% valuation completeness and 70% coordinate completeness. Chicago has high contractor availability but substantial classification ambiguity. Keep all three as probe sources, with Austin/Seattle preferred for the next data-quality iteration; do not proceed to an Actor until repeated observations and demand validation are completed. This is not a demand claim or a longitudinal-freshness claim.

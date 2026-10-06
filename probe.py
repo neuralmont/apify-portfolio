@@ -40,8 +40,11 @@ def classify(row,s):
         if any(x in low for x in ("commercial","non-residential","non residential")): return "commercial",f"source category {field}={raw}"
         if any(x in low for x in ("residential","single family","multifamily")): return "residential",f"source category {field}={raw}"
     desc=text(row.get(m.get("description"))) or ""; low=desc.lower()
-    if any(x in low for x in ("office","warehouse","retail","restaurant","tenant improvement","commercial")): return "commercial",f"heuristic work_description={desc[:300]}"
-    if any(x in low for x in ("single family","duplex","residence","residential")): return "residential",f"heuristic work_description={desc[:300]}"
+    commercial=any(x in low for x in ("office","warehouse","retail","restaurant","tenant improvement","commercial"))
+    residential=any(x in low for x in ("single family","duplex","residence","residential","dwelling","apartment","mixed use"))
+    if commercial and residential: return "unknown",f"ambiguous conflicting work_description cues: commercial and residential; text={desc[:300]}"
+    if commercial: return "commercial",f"heuristic work_description={desc[:300]}"
+    if residential: return "residential",f"heuristic work_description={desc[:300]}"
     return "unknown",None
 def address(row,s):
     m=s["mapping"]

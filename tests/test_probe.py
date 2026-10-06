@@ -26,6 +26,11 @@ class ProbeTests(unittest.TestCase):
         austin=normalize({"permit_number":"A-1","permittype":"BP","permit_class_mapped":"Commercial","permit_location":"10 MAIN ST","description":"Office fit-out","total_job_valuation":"250000","status_current":"Active","contractor_trade":"General Contractor","contractor_company_name":"Austin Build LLC"},SOURCES["austin"],"2026-10-06T00:00:00Z")
         self.assertEqual(austin["commercial_classification"],"commercial"); self.assertEqual(austin["project_valuation"],"250000"); self.assertEqual(austin["contractor_names"],["Austin Build LLC"])
 
+    def test_chicago_conflicting_use_cues_are_ambiguous(self):
+        row={"id":"C-CONFLICT","permit_":"P-CONFLICT","permit_type":"PERMIT - RENOVATION/ALTERATION","work_description":"Convert commercial space in mixed use building to a dwelling unit"}
+        out=normalize(row,SOURCES["chicago"],"2026-10-06T00:00:00Z")
+        self.assertEqual(out["commercial_classification"],"unknown"); self.assertIn("ambiguous conflicting",out["classification_evidence"])
+
     def test_http_400_captures_body_without_retry(self):
         client=probe.Client(retries=2)
         err=HTTPError("https://example.test",400,"bad query",{},BytesIO(b"invalid field applicationdate"))

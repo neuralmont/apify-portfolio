@@ -1,0 +1,31 @@
+{
+  "observation": "outputs/snapshots/20261006T204519Z",
+  "window": {"since": "2026-09-06", "until": "2026-10-06", "timezone": "UTC", "inclusive": true},
+  "api_counts": {"chicago_issued_window": 3032, "seattle_issued_window": 451, "seattle_application_date_sample_window": 453, "austin_issued_window": 4770},
+  "resource": {"requests": 11, "retries": 0, "bytes_received": 992594, "elapsed_seconds": null, "elapsed_note": "The saved manifest did not record per-city or total wall-clock elapsed time."},
+  "sample_statistics": {
+    "chicago:issued_n100": {"classification": {"commercial": 6, "residential": 27, "unknown": 67}, "address": 100, "description": 100, "valuation": 96, "contractor_overall": 99, "commercial_records": 6, "commercial_contractor": 6, "postal": 0, "latitude": 99, "longitude": 99, "status": 74},
+    "seattle:issued_n100": {"classification": {"commercial": 27, "residential": 73, "unknown": 0}, "address": 100, "description": 100, "valuation": 100, "contractor_overall": 8, "commercial_records": 27, "commercial_contractor": 1, "postal": 88, "latitude": 100, "longitude": 100, "status": 100},
+    "seattle:application_date_sample_n100": {"classification": {"commercial": 22, "residential": 78, "unknown": 0}, "address": 100, "description": 100, "valuation": 100, "contractor_overall": 0, "commercial_records": 22, "commercial_contractor": 0, "postal": 77, "latitude": 100, "longitude": 100, "status": 100},
+    "austin:issued_n100": {"classification": {"commercial": 36, "residential": 64, "unknown": 0}, "address": 100, "description": 100, "valuation": 8, "contractor_overall": 88, "commercial_records": 36, "commercial_contractor": 28, "postal": 0, "latitude": 70, "longitude": 70, "status": 100}
+  },
+  "austin_manual_audit_first_10": [
+    {"id":"2018-005770 PP","class":"residential","address":"4004 RIDGELEA DR","valuation_present":false,"contractor_present":true},
+    {"id":"2023-136138 BP","class":"residential","address":"2218 HASKELL ST","valuation_present":true,"contractor_present":true},
+    {"id":"2023-136495 EP","class":"residential","address":"1715 NASH AVE","valuation_present":false,"contractor_present":true},
+    {"id":"2025-050843 MP","class":"residential","address":"3308 STONERIDGE RD BLDG 1","valuation_present":false,"contractor_present":true},
+    {"id":"2025-116326 BP","class":"residential","address":"3417 FOOTHILL TER","valuation_present":true,"contractor_present":true},
+    {"id":"2025-120283 DS","class":"residential","address":"1805 E 18TH ST BLDG 1","valuation_present":false,"contractor_present":true},
+    {"id":"2025-143684 BP","class":"commercial","address":"2400 S CONGRESS AVE","valuation_present":false,"contractor_present":true},
+    {"id":"2025-143827 BP","class":"commercial","address":"2904 PALM WAY UNIT FLR1","valuation_present":false,"contractor_present":true},
+    {"id":"2025-149928 MP","class":"commercial","address":"10037 MENCHACA RD BLDG 1","valuation_present":false,"contractor_present":true},
+    {"id":"2025-149929 MP","class":"commercial","address":"10037 MENCHACA RD BLDG 2","valuation_present":false,"contractor_present":true}
+  ],
+  "chicago_conflicts_now_unknown": ["3342274", "3433168", "3439955", "3443901", "N2983385"],
+  "commercial_examples": [
+    {"city":"Chicago","id":"3398869","classification":"unknown","reason":"daycare / occupancy E2 text lacks an explicit reliable commercial category"},
+    {"city":"Seattle","id":"7008820-CN","classification":"commercial","reason":"source permitclassmapped=Non-Residential"},
+    {"city":"Austin","id":"2025-143684 BP","classification":"commercial","reason":"source permit_class_mapped=Commercial; grocery-store ramp description"}
+  ],
+  "limitations": ["Full-window counts and latest-100 sample statistics are distinct; no territory coverage or yield extrapolation is claimed.", "Contractor completeness counts source-supported company/contact fields, not verified business identity or purchase intent.", "No publication latency or longitudinal reliability is established."]
+}
