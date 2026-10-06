@@ -1,0 +1,69 @@
+{
+  "environment_inspection": {
+    "system_python": "3.9.6",
+    "compatible_python": "3.11.14",
+    "package_source": "public PyPI via the configured pip index",
+    "credential_output": "redacted; no credentials recorded"
+  },
+  "python": "3.11.14",
+  "sdk_versions": {
+    "apify": "4.0.2",
+    "apify-client": "3.2.1",
+    "crawlee": "1.10.4",
+    "pydantic": "2.13.5",
+    "websockets": "17.2",
+    "requests": "2.34.2",
+    "cryptography": "50.0.2"
+  },
+  "requirements_pin": "apify==4.0.2",
+  "command_template": "/tmp/austin-apify-sdk-311/bin/python scripts/verify_billing_sdk.py --output-dir <local-storage-dir> --records <n> --max-total-charge-usd <limit>",
+  "mode": "ACTOR_TEST_PAY_PER_EVENT=true; no Apify credentials; local storage",
+  "local_event_price": "$1 simulated default per event; not the proposed $0.003 Console price",
+  "scenarios": [
+    {
+      "name": "sufficient budget",
+      "records_requested": 2,
+      "max_total_charge_usd": 10,
+      "process_exit_status": 0,
+      "dataset_rows": 2,
+      "charge_events": {"apify-default-dataset-item": 2, "permit-record": 2},
+      "completion": "complete",
+      "requested_result_completion": "complete",
+      "full_window_coverage": true,
+      "charged_records": 2,
+      "contractor_summary_rows": 1,
+      "contractor_summary_permit_count_sum": 2
+    },
+    {
+      "name": "partial spending limit",
+      "records_requested": 2,
+      "max_total_charge_usd": 2,
+      "process_exit_status": 0,
+      "dataset_rows": 1,
+      "charge_events": {"apify-default-dataset-item": 1, "permit-record": 1},
+      "completion": "incomplete",
+      "requested_result_completion": "incomplete",
+      "full_window_coverage": false,
+      "charged_records": 1,
+      "billing_limit_reached": true,
+      "contractor_summary_rows": 1,
+      "contractor_summary_permit_count_sum": 1
+    },
+    {
+      "name": "exact-budget final requested record",
+      "records_requested": 1,
+      "max_total_charge_usd": 2,
+      "process_exit_status": 0,
+      "dataset_rows": 1,
+      "charge_events": {"apify-default-dataset-item": 1, "permit-record": 1},
+      "completion": "complete",
+      "requested_result_completion": "complete",
+      "full_window_coverage": true,
+      "charged_records": 1,
+      "billing_limit_reached": true,
+      "contractor_summary_rows": 1,
+      "contractor_summary_permit_count_sum": 1
+    }
+  ],
+  "interpretation": "The local SDK's synthetic default-dataset event is visible in addition to the custom event. Before paid activation, remove that synthetic event or set it to zero in Apify Console; customer charging remains disabled."
+}

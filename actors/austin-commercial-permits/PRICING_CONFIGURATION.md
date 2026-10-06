@@ -30,9 +30,11 @@ Apify's documented local switch logs test charges without billing:
 
 ```bash
 cd actors/austin-commercial-permits
-ACTOR_TEST_PAY_PER_EVENT=true python -m austin_actor.main
+ACTOR_TEST_PAY_PER_EVENT=true python3.11 -m austin_actor.main
 ```
 
 Inspect the local `charging-log` dataset and `RUN_SUMMARY`; do not use production credentials. The current repository tests also exercise successful charging, spending-limit partial delivery, and an ambiguous push failure without a blind retry.
+
+For the fixture-backed real-SDK reconciliation used for this release, run `scripts/verify_billing_sdk.py` with `apify==4.0.2` in Python 3.11+; see `evidence/billing_sdk_integration_20261006.json` for the three recorded cases.
 
 References: [Apify Python SDK pay-per-event](https://docs.apify.com/sdk/python/docs/concepts/pay-per-event) and [Apify pay-per-event pricing](https://docs.apify.com/actors/publishing/monetize/pay-per-event).

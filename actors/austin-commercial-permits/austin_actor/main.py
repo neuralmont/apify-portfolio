@@ -41,8 +41,9 @@ async def main() -> None:
                 break
 
         summary = result["summary"]
+        extraction_errors = list(summary.get("errors") or [])
         summary["records_delivered"] = delivered
-        extraction_ok = not summary.get("errors")
+        extraction_ok = not extraction_errors
         summary["requested_result_completion"] = "complete" if delivered == len(result["records"]) and extraction_ok and not delivery_error and not billing_error else "incomplete"
         summary["full_window_coverage"] = bool(
             summary.get("pagination_complete")
@@ -79,8 +80,9 @@ async def main() -> None:
             )
         await Actor.set_value("RUN_SUMMARY", summary)
         await Actor.set_value("SCHEMA_METADATA", result["schema"])
-        if billing_error:
-            raise ExtractionError("Billing configuration failure; see RUN_SUMMARY")
+        fatal_failure = bool(extraction_errors or delivery_error or billing_error)
+        if fatal_failure:
+            raise ExtractionError("Extraction or delivery failed; see RUN_SUMMARY")
         if billing_limit_reached and hasattr(Actor, "exit"):
             await Actor.exit(status_message="Customer spending limit reached; delivered records are preserved")
             return

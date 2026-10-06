@@ -264,9 +264,10 @@ class ActorOutputTests(unittest.TestCase):
             async def set_value(self, key, value): self.values[key] = value
             async def exit(self, **kwargs): self.exit_called = True
         fake = FakeActor()
-        self._run_billing_actor(fake, [{"source_record_id": "A-1"}], ["source page failed after delivered row"])
+        with self.assertRaises(Exception):
+            self._run_billing_actor(fake, [{"source_record_id": "A-1"}], ["source page failed after delivered row"])
         summary = fake.values["RUN_SUMMARY"]
-        self.assertTrue(fake.exit_called)
+        self.assertFalse(fake.exit_called)
         self.assertEqual(summary["completion"], "incomplete")
         self.assertIn("source page failed", summary["errors"][0])
 
