@@ -78,6 +78,27 @@ docker run --rm austin-commercial-permits-beta
 
 The run’s default dataset contains permit records. `RUN_SUMMARY` and `CONTRACTOR_SUMMARY` are JSON artifacts in the run’s default key-value store; the latter is isolated by run and counts activity within delivered records, not distinct construction projects.
 
+## Private Apify cloud verification
+
+This pass created a private Actor and completed a remote build and benchmark runs. No public publishing, schedule, or separate charging configuration was enabled.
+
+| Item | ID/status | Runtime | Peak memory | Usage |
+| --- | --- | ---: | ---: | ---: |
+| Build 0.1.1 | `rgIovT5VBdeaVQ8cv` / SUCCEEDED | 15.235 s | n/a | $0.0033731111 build usage |
+| maxResults 100 | `pScqzuF4TcT9eA0Mi` / SUCCEEDED | 8.037 s | 64.35 MiB | $0.0041817487 |
+| maxResults 1,500 | `uYHhmQ76cdU9647Yk` / SUCCEEDED | 37.145 s | 77.27 MiB | $0.0161507564 |
+| maxResults 5,000 | `pHdBKntPTSvKxy69m` / SUCCEEDED | 114.023 s | 100.75 MiB | $0.0445449135 |
+
+All three runs used the `2026-01-01` through `2026-10-06` Commercial window. They reported 12,008 matching source records, no errors or duplicates, and delivered 100, 1,500, and 5,000 records respectively. Each was a successful capped run with `cap_truncated: true`. The 1,500 run requested pages of 1,000 and 500; the 5,000 run requested five pages of 1,000. Default dataset item counts matched delivered records. `RUN_SUMMARY` and `CONTRACTOR_SUMMARY` were readable from each run’s default key-value store.
+
+Representative authenticated Console run links and storage IDs:
+
+- [100-record run](https://console.apify.com/actors/g32YlfG1SeYV9ctKK/runs/pScqzuF4TcT9eA0Mi): dataset `5qgeA1x0bReM3tUSM`, key-value store `viDIJ5d2UB8afra1I`
+- [1,500-record run](https://console.apify.com/actors/g32YlfG1SeYV9ctKK/runs/uYHhmQ76cdU9647Yk): dataset `mKd7MC8tP7hkWVGhC`, key-value store `bhgmrlikqDVMglbjx`
+- [5,000-record run](https://console.apify.com/actors/g32YlfG1SeYV9ctKK/runs/pHdBKntPTSvKxy69m): dataset `ZgHG4XIZmxYkG1NEd`, key-value store `jqZaCP7AaXfFs5ocl`
+
+The run output tab exposes the signed dataset, `RUN_SUMMARY`, and `CONTRACTOR_SUMMARY` links; signed URLs are intentionally not committed to Git.
+
 ## Remaining limitations
 
 This beta covers only issued permits in Austin’s dataset. It does not identify unissued applications or guarantee current publication timing. The Actor preserves source classification and does not infer it from addresses or descriptions. Missing valuations and coordinates remain missing. Contractor summaries group exact source company/trade values and count delivered permit records, not distinct projects. No billing, publishing, scheduling, enrichment, or Apify deployment was performed.
