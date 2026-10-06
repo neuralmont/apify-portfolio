@@ -1,0 +1,54 @@
+{
+  "observation": "outputs/snapshots/20261006T202655Z",
+  "window": {"since": "2026-09-06", "until": "2026-10-06", "timezone": "UTC", "inclusive": true},
+  "saved_outputs": {
+    "chicago": ["chicago/issued_raw.jsonl", "chicago/normalized.jsonl", "chicago/normalized.csv"],
+    "seattle": ["seattle/issued_raw.jsonl"],
+    "austin": []
+  },
+  "api_counts": {"chicago_issued_window": 3032, "seattle_issued_window": 451},
+  "sample_statistics": {
+    "chicago_issued_n100": {
+      "classification": {"commercial": 11, "residential": 25, "unknown": 64},
+      "address_nonempty": 100, "description_nonempty": 100, "valuation_nonempty": 96, "contractor_names_nonempty": 99, "postal_nonempty": 0, "latitude_nonempty": 99, "longitude_nonempty": 99, "status_nonempty": 74
+    },
+    "seattle_issued_n100": {
+      "classification": {"commercial": 27, "residential": 73, "unknown": 0},
+      "address_nonempty": 100, "description_nonempty": 100, "valuation_nonempty": 100, "contractor_names_nonempty": 8, "postal_nonempty": 88, "latitude_nonempty": 100, "longitude_nonempty": 100, "status_nonempty": 100
+    }
+  },
+  "manual_audit": {
+    "method": "record-level checks against saved raw fields and the official source-shaped mapping; not external site re-fetches",
+    "chicago": [
+      {"id":"3342274","address":"1463 W MONTROSE AVE","classification":"commercial","evidence":"work_description contains commercial space and restaurant","contractors":"contact_3..contact_8 roles are contractor/masonry; names retained"},
+      {"id":"3398869","address":"5541 S HALSTED ST","classification":"unknown","evidence":"no explicit category and description lacks configured class cue","contractors":"contact_3..contact_7 roles are contractor/masonry; names retained"},
+      {"id":"3426625","address":"6145 S GREENWOOD AVE","classification":"residential","evidence":"work_description contains residential building","contractors":"contact_2..contact_8 roles are contractor/masonry; names retained"},
+      {"id":"3433168","address":"6411 S CENTRAL AVE","classification":"commercial","evidence":"heuristic work text contains commercial space; text also says conversion to single-family, ambiguity retained","contractors":"contact_1..contact_5 roles inspected"},
+      {"id":"3434494","address":"2015 N KILDARE AVE","classification":"unknown","evidence":"no configured class cue","contractors":"contact_1..contact_4 roles inspected"},
+      {"id":"3435337","address":"3208 S LEAVITT ST","classification":"residential","evidence":"work_description contains single family dwelling","contractors":"contact_1..contact_3 roles inspected"},
+      {"id":"3439955","address":"3545 W BELMONT AVE","classification":"commercial","evidence":"work_description contains commercial space","contractors":"contact_1..contact_4 roles inspected"},
+      {"id":"3440847","address":"506 W DEMING PL","classification":"unknown","evidence":"no configured class cue","contractors":"contact_1..contact_3 roles inspected"},
+      {"id":"3441918","address":"3341 S PRAIRIE AVE","classification":"unknown","evidence":"no configured class cue","contractors":"contact_1..contact_4 roles inspected"},
+      {"id":"3442477","address":"220 N LOREL AVE","classification":"residential","evidence":"work_description contains residential building","contractors":"contact_1..contact_4 roles inspected"}
+    ],
+    "seattle": [
+      {"id":"7008820-CN","address":"1409 NE 80TH ST","classification":"commercial","evidence":"permitclassmapped=Non-Residential","contractors":"company field absent in record"},
+      {"id":"7112618-CN","address":"9603 29TH AVE NW","classification":"residential","evidence":"permitclassmapped=Residential","contractors":"company field absent in record"},
+      {"id":"7116064-DM","address":"1524 M L KING JR WAY","classification":"residential","evidence":"permitclassmapped=Residential","contractors":"company field absent in record"},
+      {"id":"7120280-CN","address":"7332 58TH AVE NE","classification":"residential","evidence":"permitclassmapped=Residential","contractors":"company field absent in record"},
+      {"id":"7121274-CN","address":"7934 34TH AVE SW","classification":"residential","evidence":"permitclassmapped=Residential","contractors":"company field absent in record"},
+      {"id":"7121275-DM","address":"7938 34TH AVE SW","classification":"residential","evidence":"permitclassmapped=Residential","contractors":"company field absent in record"},
+      {"id":"7123458-CN","address":"9416 RAINIER AVE S","classification":"commercial","evidence":"permitclassmapped=Non-Residential","contractors":"company field absent in record"},
+      {"id":"7124182-DM","address":"5623 44TH AVE SW","classification":"residential","evidence":"permitclassmapped=Residential","contractors":"company field absent in record"},
+      {"id":"7130829-CN","address":"7936 34TH AVE SW","classification":"residential","evidence":"permitclassmapped=Residential","contractors":"company field absent in record"},
+      {"id":"7130830-CN","address":"7932 34TH AVE SW","classification":"residential","evidence":"permitclassmapped=Residential","contractors":"company field absent in record"}
+    ]
+  },
+  "useful_commercial_examples": [
+    {"city":"Chicago","source_record_id":"3342274","supporting_text":"demo existing 1-story commercial space ... existing restaurant"},
+    {"city":"Chicago","source_record_id":"3439955","supporting_text":"convert existing ground floor commercial space ... mixed use building"},
+    {"city":"Seattle","source_record_id":"7008820-CN","supporting_text":"permitclassmapped=Non-Residential; storage container for seating area at eating/drinking establishment"},
+    {"city":"Seattle","source_record_id":"7123458-CN","supporting_text":"permitclassmapped=Non-Residential; change of use ... physical therapy office"}
+  ],
+  "limitations": ["Counts are full-window API counts; statistics are only the deterministic latest-100 sample.", "Manual checks verify field mapping and classification evidence in saved source-shaped records, not independent permit adjudication.", "No Austin sample was saved because schema validation stopped before its issued query."]
+}

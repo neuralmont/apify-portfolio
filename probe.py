@@ -12,9 +12,9 @@ FIELDS = ["city","source_dataset","source_record_id","permit_number","source_url
 
 # Explicit mappings are accepted only after /api/views/{id} confirms fields.
 SOURCES = {
- "chicago": {"city":"Chicago","dataset":"ydr8-5enu","domain":"https://data.cityofchicago.org","date":"issue_date","id":"id","permit":"permit_","url":"https://data.cityofchicago.org/resource/ydr8-5enu.json","mapping":{"application":"application_start_date","issue":"issue_date","status":"permit_status","type":"permit_type","description":"work_description","valuation":"reported_cost","postal":"zip_code","updated":"_updated_at","category":"permit_type","address_parts":["street_number","street_direction","street_name","street_type","street_suffix"],"lat":"latitude","lon":"longitude","contractor_fields":[["contractor_1_type","contractor_1_name"],["contractor_2_type","contractor_2_name"],["contractor_3_type","contractor_3_name"],["contractor_4_type","contractor_4_name"],["contractor_5_type","contractor_5_name"],["contractor_6_type","contractor_6_name"],["contractor_7_type","contractor_7_name"],["contractor_8_type","contractor_8_name"],["contractor_9_type","contractor_9_name"],["contractor_10_type","contractor_10_name"]]}},
- "seattle": {"city":"Seattle","dataset":"76t5-zqzr","domain":"https://data.seattle.gov","date":"issueddate","application_date":"applicationdate","id":"permitnum","permit":"permitnum","url":"https://data.seattle.gov/resource/76t5-zqzr.json","mapping":{"application":"applicationdate","issue":"issueddate","status":"statuscurrent","type":"permitclassmapped","description":"description","updated":"_updated_at","category":"permitclassmapped","address":"originaladdress1","postal":"originalzip","lat":"latitude","lon":"longitude","valuation":"estprojectcost","contractor_fields":[["contractorcompanyname","contractorcompanyname"]],"verified_company_fields":["contractorcompanyname"]}},
- "austin": {"city":"Austin","dataset":"3syk-w9eu","domain":"https://data.austintexas.gov","date":"issue_date","id":"permit_number","permit":"permit_number","url":"https://data.austintexas.gov/resource/3syk-w9eu.json","mapping":{"application":"application_date","issue":"issue_date","status":"status_current","type":"permit_type","description":"description","updated":"_updated_at","category":"permit_type","address":"permit_location","postal":"zip_code","lat":"latitude","lon":"longitude","valuation":"est_project_cost","contractor_fields":[["contractor_trade","contractor_company_name"]]}}
+ "chicago": {"city":"Chicago","dataset":"ydr8-5enu","domain":"https://data.cityofchicago.org","date":"issue_date","id":"id","permit":"permit_","url":"https://data.cityofchicago.org/resource/ydr8-5enu.json","mapping":{"application":"application_start_date","issue":"issue_date","status":"permit_status","type":"permit_type","description":"work_description","valuation":"reported_cost","postal":"zip_code","updated":"_updated_at","category":None,"address_parts":["street_number","street_direction","street_name","street_type","street_suffix"],"lat":"latitude","lon":"longitude","contractor_fields":[["contact_1_type","contact_1_name"],["contact_2_type","contact_2_name"],["contact_3_type","contact_3_name"],["contact_4_type","contact_4_name"],["contact_5_type","contact_5_name"],["contact_6_type","contact_6_name"],["contact_7_type","contact_7_name"],["contact_8_type","contact_8_name"],["contact_9_type","contact_9_name"],["contact_10_type","contact_10_name"]]}},
+ "seattle": {"city":"Seattle","dataset":"76t5-zqzr","domain":"https://data.seattle.gov","date":"issueddate","application_date":"applieddate","id":"permitnum","permit":"permitnum","url":"https://data.seattle.gov/resource/76t5-zqzr.json","mapping":{"application":"applieddate","issue":"issueddate","status":"statuscurrent","type":"permitclassmapped","description":"description","updated":"_updated_at","category":"permitclassmapped","address":"originaladdress1","postal":"originalzip","lat":"latitude","lon":"longitude","valuation":"estprojectcost","contractor_fields":[["contractorcompanyname","contractorcompanyname"]],"verified_company_fields":["contractorcompanyname"]}},
+ "austin": {"city":"Austin","dataset":"3syk-w9eu","domain":"https://data.austintexas.gov","date":"issue_date","id":"permit_number","permit":"permit_number","url":"https://data.austintexas.gov/resource/3syk-w9eu.json","mapping":{"application":"application_date","issue":"issue_date","status":"status_current","type":"permittype","description":"description","updated":"_updated_at","category":"permit_class_mapped","address":"permit_location","postal":"zip_code","lat":"latitude","lon":"longitude","valuation":"total_job_valuation","contractor_fields":[["contractor_trade","contractor_company_name"]]}}
 }
 class ProbeError(Exception): pass
 def atom_write(path,data):
@@ -72,7 +72,14 @@ class Client:
             try:
                 req=Request(full,headers={"User-Agent":"commercial-permit-feasibility-probe/2.0"})
                 with urlopen(req,timeout=25) as r: body=r.read(); self.bytes+=len(body); return json.loads(body)
-            except (HTTPError,URLError,TimeoutError,ValueError) as e: last=str(e)
+            except HTTPError as e:
+                if e.code == 400:
+                    detail=e.read(1200).decode("utf-8","replace")
+                    last=f"HTTP 400 Bad Request: {detail}"
+                    self.errors.append({"url":full,"error":last})
+                    raise ProbeError(last)
+                last=str(e)
+            except (URLError,TimeoutError,ValueError) as e: last=str(e)
         self.errors.append({"url":full,"error":last}); raise ProbeError(last)
 def validate_schema(client,s):
     meta=client.get(f"{s['domain']}/api/views/{s['dataset']}"); names={c.get("fieldName") for c in meta.get("columns",[])}; m=s["mapping"]
@@ -130,17 +137,23 @@ def run_live(args):
         try:
             validate_schema(c,s); cohorts=["issued","application_date_sample"] if name=="seattle" and args.seattle_in_progress else ["issued"]
             for cohort in cohorts:
-                raw,n,where,order=query_city(c,s,start,end,args.limit,cohort); normalized=[normalize(x,s,observed.isoformat()) for x in raw]
+                try: raw,n,where,order=query_city(c,s,start,end,args.limit,cohort)
+                except Exception as e:
+                    manifest["cohorts"][f"{name}:{cohort}"]={"status":"failed","records_returned":0,"full_window_count":None,"errors":[str(e)]}
+                    continue
+                normalized=[normalize(x,s,observed.isoformat()) for x in raw]
                 for x in normalized: x["cohort"]=cohort
                 cohort_keys=[identity(x) for x in normalized]
                 if len(cohort_keys)!=len(set(cohort_keys)): raise ProbeError(f"duplicate identity within cohort: {cohort}")
-                atom_write(snap/name/f"{cohort}_raw.jsonl","".join(json.dumps(x,ensure_ascii=False)+"\n" for x in raw)); manifest["cohorts"][f"{name}:{cohort}"]={"records_returned":len(normalized),"full_window_count":n,"where":where,"order":order}
+                atom_write(snap/name/f"{cohort}_raw.jsonl","".join(json.dumps(x,ensure_ascii=False)+"\n" for x in raw)); manifest["cohorts"][f"{name}:{cohort}"]={"status":"success" if normalized else "verified_empty","records_returned":len(normalized),"full_window_count":n,"where":where,"order":order}
                 city_rows += normalized
-            status["records_returned"]=len(city_rows); status["status"]="verified_empty" if not city_rows and all(manifest["cohorts"][f"{name}:{x}"]["full_window_count"]==0 for x in cohorts) else "success"
+            successful=[manifest["cohorts"].get(f"{name}:{x}",{}).get("status") in ("success","verified_empty") for x in cohorts]
+            status["records_returned"]=len(city_rows); status["status"]=("success" if all(successful) and city_rows else "verified_empty" if all(successful) and not city_rows else "partial" if any(successful) else "failed")
             city_dir=snap/name; atom_write(city_dir/"normalized.jsonl","".join(json.dumps(x,ensure_ascii=False)+"\n" for x in city_rows)); atom_write(city_dir/"normalized.csv",csv_text(city_rows))
             old=baseline/f"{name}.jsonl"; prev=previous/f"{name}.jsonl"; manifest["cities"][name]={"status":status["status"],"records_returned":status["records_returned"],"errors":[],"previous_baseline":str(prev) if old.exists() else None,"current_snapshot":str(city_dir/"normalized.jsonl"),"optional_mappings_absent":s.get("optional_mappings_absent",[])}
             if old.exists(): atom_write(prev,old.read_text(encoding="utf-8"))
-            atom_write(old,"".join(json.dumps(x,ensure_ascii=False)+"\n" for x in city_rows)); rows += city_rows
+            if status["status"] in ("success","verified_empty"): atom_write(old,"".join(json.dumps(x,ensure_ascii=False)+"\n" for x in city_rows))
+            rows += city_rows
         except Exception as e: status["errors"]=[str(e)]
         status["elapsed_seconds"]=round(time.monotonic()-t,3)
         if name not in manifest["cities"]: manifest["cities"][name]=status

@@ -1,14 +1,15 @@
 normalized_field,Chicago,Seattle,Austin,notes
 source_record_id,id,permitnum,permit_number,stable source identifier
 permit_number,permit_,permitnum,permit_number,raw value preserved
-application_date,application_start_date,applicationdate,application_date,nullable
+application_date,application_start_date,applieddate,application_date,nullable
 issue_date,issue_date,issueddate,issue_date,explicit window field
 status_raw,permit_status,statuscurrent,status_current,raw status
-permit_type,permit_type,permitclassmapped,permit_type,source category preferred
+permit_type,permit_type,permittypedesc,permittype,raw permit type; classification is separate
 work_description,work_description,description,description,raw text
-address,street_number + direction + name + type + suffix,originaladdress1,permit_location,Chicago components joined; no guessing
+address,street_number + direction + name + type + suffix,originaladdress1,permit_location,Chicago components joined; missing Chicago suffix/type remains absent
 postal_code,zip_code,originalzip,zip_code,nullable aliases
-project_valuation,reported_cost,estprojectcost,est_project_cost,raw value; no commercial inference
-contractor_names,numbered name fields gated by numbered role fields,contact company/name,trade + company name,only role-supported contacts
+project_valuation,reported_cost,estprojectcost,total_job_valuation,raw value; no commercial inference
+commercial_classification,unknown/heuristic work text,permitclassmapped,permit_class_mapped,source classification where available
+contractor_names,contact_N_name gated by contact_N_type,contractorcompanyname,contractor_trade + contractor_company_name,role/company evidence only
 latitude/longitude,latitude/longitude,location,latitude/longitude,location parsing supported
 source_updated_at,_updated_at,_updated_at,_updated_at,source timestamp when available

@@ -1,6 +1,8 @@
 import json, tempfile, unittest
 from types import SimpleNamespace
 from unittest.mock import patch
+from urllib.error import HTTPError
+from io import BytesIO
 from pathlib import Path
 import probe
 from probe import SOURCES, ProbeError, compare, identity, load_rows, normalize
@@ -17,6 +19,19 @@ class ProbeTests(unittest.TestCase):
         row={"permitnum":"S-1","permitclassmapped":"Commercial","description":"New building","contractorcompanyname":"Acme Builders LLC"}
         out=normalize(row,s,"2026-10-06T00:00:00Z")
         self.assertEqual(out["contractor_names"],["Acme Builders LLC"])
+
+    def test_real_source_shaped_chicago_and_austin_fields(self):
+        chicago=normalize({"id":"C-1","permit_":"P-1","permit_type":"PERMIT - RENOVATION/ALTERATION","work_description":"Commercial tenant buildout","street_number":"10","street_direction":"W","street_name":"MAIN ST","contact_1_type":"OWNER","contact_1_name":"Owner LLC","contact_2_type":"CONTRACTOR-GENERAL CONTRACTOR","contact_2_name":"Build Co LLC","reported_cost":"87000"},SOURCES["chicago"],"2026-10-06T00:00:00Z")
+        self.assertEqual(chicago["address"],"10 W MAIN ST"); self.assertEqual(chicago["contractor_names"],["Build Co LLC"])
+        austin=normalize({"permit_number":"A-1","permittype":"BP","permit_class_mapped":"Commercial","permit_location":"10 MAIN ST","description":"Office fit-out","total_job_valuation":"250000","status_current":"Active","contractor_trade":"General Contractor","contractor_company_name":"Austin Build LLC"},SOURCES["austin"],"2026-10-06T00:00:00Z")
+        self.assertEqual(austin["commercial_classification"],"commercial"); self.assertEqual(austin["project_valuation"],"250000"); self.assertEqual(austin["contractor_names"],["Austin Build LLC"])
+
+    def test_http_400_captures_body_without_retry(self):
+        client=probe.Client(retries=2)
+        err=HTTPError("https://example.test",400,"bad query",{},BytesIO(b"invalid field applicationdate"))
+        with patch.object(probe,"urlopen",side_effect=err):
+            with self.assertRaises(ProbeError) as caught: client.get("https://example.test")
+        self.assertEqual(client.retries_used,0); self.assertIn("invalid field applicationdate",str(caught.exception))
 
     def test_source_scoped_identity_and_duplicate_rejection(self):
         with tempfile.TemporaryDirectory() as d:

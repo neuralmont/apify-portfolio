@@ -1,6 +1,21 @@
 # Validation report
 
-Observation date: 2026-10-06 (America/Chicago). A normal permitted HTTPS check and the corrected probe could not resolve `data.cityofchicago.org`, `data.seattle.gov`, or `data.austintexas.gov`; Python returned `nodename nor servname provided`. The probe exited 2 after 9 requests, 6 bounded retries, and 0 bytes. No live rows, counts, schema confirmations, contractor audit, classification audit, or 10-record source audits were claimed. This is an unresolved connectivity blocker, not evidence that the sources are empty.
+Observation date: 2026-10-06 (America/Chicago). A manual macOS Terminal run reached all three official sources and saved `outputs/snapshots/20261006T202655Z/`. Codex’s ordinary execution environment remains unable to resolve the hosts, so no second live run was attempted here. The saved observation is the live evidence used below.
+
+## Saved live observation
+
+The manifest reports Chicago `success` with 100 issued rows and a full-window count of 3,032; Seattle issued `success` with 100 rows and a full-window count of 451; Seattle’s optional `applicationdate` cohort returned HTTP 400; Austin stopped at schema validation because the prior `permit_type` mapping was absent. Chicago saved `issued_raw.jsonl`, `normalized.jsonl`, and `normalized.csv`. Seattle saved only `issued_raw.jsonl`: its issued query completed, but the old all-or-nothing city path did not persist normalized issued output before the optional cohort failure. Austin saved no sample. The corrected code now persists each successful cohort before continuing to an optional cohort and captures bounded HTTP 400 bodies without retrying the same request.
+
+The raw saved records corrected the mappings: Chicago has `contact_1_type/name` through `contact_9_type/name` in the sample, not `contractor_N_*`; Seattle has `contractorcompanyname` on 8 of 100 issued records; Austin’s official schema uses `permittype`, `permit_class_mapped`, `permit_location`, `total_job_valuation`, `status_current`, `contractor_trade`, and `contractor_company_name`. The Austin and Chicago/Seattle metadata references are recorded in [source_inventory.md](source_inventory.md).
+
+Measured sample quality and 10-record audits are in [evidence/live_quality_20261006T202655Z.json](evidence/live_quality_20261006T202655Z.json). Counts are full-window API counts; completeness and classification counts are only the deterministic latest-100 samples:
+
+| Sample | Classification | Address | Description | Valuation | Contractor | Other |
+|---|---:|---:|---:|---:|---:|---|
+| Chicago issued n=100 | commercial 11, residential 25, unknown 64 | 100% | 100% | 96% | 99% | postal 0%, status 74%, coordinates 99% |
+| Seattle issued n=100 | commercial 27, residential 73, unknown 0 | 100% | 100% | 100% | 8% | postal 88%, status/coordinates 100% |
+
+Chicago classification is heuristic work-description evidence because the source does not provide an explicit commercial/residential category in the mapped fields. Seattle classification is source-provided `permitclassmapped`. These samples are not representative yield estimates and do not establish lead quality, purchase intent, or equipment need.
 
 Exact macOS Terminal rerun commands:
 
@@ -19,13 +34,13 @@ The command intentionally returns exit code 2 when one or more requested cities 
 
 ## What is implemented
 
-The live command fetches official schema metadata before using explicit city mappings, bounds each cohort to 100 rows, uses deterministic date-descending/ID-ascending order, and a count query for each cohort. Seattle’s second cohort is deliberately named `application_date_sample`; it is not asserted to be in progress or unissued. Issued/application overlap is retained as separate cohort identity. It records request count, retries, bytes, elapsed time, and errors. Raw sampled records are saved beside normalized records. Per-city baselines are timestamped and advanced only after that city succeeds, including a verified empty result; failed cities retain their prior baseline. Atomic writes prevent partially written files.
+The live command fetches official schema metadata before using explicit city mappings, bounds each cohort to 100 rows, uses deterministic date-descending/ID-ascending order, and a count query for each cohort. Seattle’s second cohort is deliberately named `application_date_sample`; it is not asserted to be in progress or unissued. Issued/application overlap is retained as separate cohort identity. It records request count, retries, bytes, elapsed time, and errors. Raw sampled records are saved beside normalized records. Successful cohorts are persisted even if a later optional cohort fails. HTTP 400 responses include a bounded response body and are not retried unchanged. Per-city baselines are timestamped and advanced only after that city succeeds; failed or partial cities retain their prior baseline. Atomic writes prevent partially written files.
 
 The comparator emits deterministic `new` and `changed` events for status, valuation, description, and contractor fields. Event IDs hash the transition payload, so two successive changes differ while replaying the same snapshot pair deduplicates to the same ID. It never emits removals and does not overwrite a baseline. When both manifest paths are supplied it rejects different date windows or cohort configurations. Fixtures demonstrate one changed and one new record; fixture results are not live observations.
 
 ## Quality questions to answer after live run
 
-- Inspect at least 10 rows per accessible city against the official landing page/source record URL; record mapping errors, missingness, and classification decisions.
+- The saved Chicago and Seattle samples have ten-record mapping/classification audits in the evidence artifact; they are checks against source-shaped raw fields, not independent permit adjudication.
 - Compare counts by application date, issue date, and status where fields support it.
 - Count contractor names and distinguish business names from individual names.
 - Inspect repeated addresses and source project/related-permit fields; do not merge on address alone.
@@ -40,4 +55,4 @@ No current Apify pricing was verified in this offline run, so no dollar estimate
 
 ## Recommendation
 
-**Narrow.** The official datasets are plausible inputs and the extraction/comparison mechanics are technically feasible, but this run cannot establish current yield, completeness, contractor usefulness, freshness, or customer demand. A next probe should restore network access, complete the 10-row audits, and run repeated observations before a full Actor is considered. This is not a technical go and is not proof of demand.
+**Narrow.** Chicago and Seattle provide usable issued-permit inputs in this observation, with materially different contractor completeness and classification evidence. Austin and Seattle’s application cohort still require a corrected live run. The bounded extraction mechanics are technically feasible, but source quality, freshness, repeated-change capture, and customer demand remain unvalidated. This is not a technical go and is not proof of demand.
