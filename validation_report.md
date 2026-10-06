@@ -1,12 +1,24 @@
 # Validation report
 
-Observation date: 2026-10-06 (America/Chicago). The execution environment could not resolve the three official hosts (`curl` returned `Could not resolve host`), so no live rows, counts, or 10-record source audits were claimed. This is an unresolved blocker, not evidence that the sources are empty. Run the exact command in the README from a network-enabled environment to populate live outputs and metrics.
+Observation date: 2026-10-06 (America/Chicago). The execution environment could not resolve the three official hosts (`curl` returned `Could not resolve host` and Python returned `nodename nor servname provided`), so no live rows, counts, or 10-record source audits were claimed. This is an unresolved connectivity blocker, not evidence that the sources are empty. Run the exact command in the README from a network-enabled environment to populate live outputs and metrics.
+
+Exact macOS Terminal rerun commands:
+
+```bash
+cd /Users/johnmcmanus/Documents/ChatGPT/apify-portfolio
+mkdir -p outputs
+python3 probe.py live --cities chicago seattle austin --limit 100 --since 2026-09-06 --until 2026-10-06 --seattle-in-progress --out outputs/live.csv > outputs/live.stdout.json
+echo "exit=$?"
+cat outputs/run_metrics.json
+```
+
+The command intentionally returns exit code 2 when one or more requested cities fail. It still saves timestamped diagnostics and preserves each previously successful city baseline.
 
 ## What is implemented
 
-The live command bounds each city to at most 100 rows, one 30-day window, deterministic date-descending/ID-ascending order, and a count query for the full window. It records request count, retries, bytes, elapsed time, and errors. Sample completeness is calculated only over returned rows; the full-window count is kept separate. Source timestamps and `observed_at` are not conflated.
+The live command fetches official schema metadata before using explicit city mappings, bounds each cohort to 100 rows, uses deterministic date-descending/ID-ascending order, and a count query for each cohort. It records request count, retries, bytes, elapsed time, and errors. Raw sampled records are saved beside normalized records. Per-city baselines are timestamped and advanced only after that city succeeds, including a verified empty result; failed cities retain their prior baseline. Atomic writes prevent partially written files.
 
-The comparator emits deterministic `new` and `changed` events for status, valuation, description, and contractor fields. It never emits removals and does not overwrite a baseline. Fixtures demonstrate one changed and one new record; fixture results are not live observations.
+The comparator emits deterministic `new` and `changed` events for status, valuation, description, and contractor fields. Event IDs hash the transition payload, so two successive changes differ while replaying the same snapshot pair deduplicates to the same ID. It never emits removals and does not overwrite a baseline. Fixtures demonstrate one changed and one new record; fixture results are not live observations.
 
 ## Quality questions to answer after live run
 

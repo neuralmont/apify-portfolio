@@ -3,12 +3,12 @@ source_record_id,id,permitnum,permit_number,stable source identifier
 permit_number,permit_,permitnum,permit_number,raw value preserved
 application_date,application_start_date,applicationdate,application_date,nullable
 issue_date,issue_date,issueddate,issue_date,explicit window field
-status_raw,permit_status,statuscurrent,status,raw status
+status_raw,permit_status,statuscurrent,status_current,raw status
 permit_type,permit_type,permitclassmapped,permit_type,source category preferred
 work_description,work_description,description,description,raw text
-address,street_address,originaladdress1,permit_location,nullable aliases
+address,street_number + direction + name + type + suffix,originaladdress1,permit_location,Chicago components joined; no guessing
 postal_code,zip_code,originalzip,zip_code,nullable aliases
 project_valuation,reported_cost,estprojectcost,est_project_cost,raw value; no commercial inference
-contractor_names,contractor names,contractor company/name,contractor company/name,company/name only when source provides it
+contractor_names,numbered name fields gated by numbered role fields,contact company/name,trade + company name,only role-supported contacts
 latitude/longitude,latitude/longitude,location,latitude/longitude,location parsing supported
 source_updated_at,_updated_at,_updated_at,_updated_at,source timestamp when available

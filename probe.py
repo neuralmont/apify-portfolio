@@ -1,148 +1,135 @@
 #!/usr/bin/env python3
-"""Bounded Socrata feasibility probe for commercial construction permits.
-
-Uses only the Python standard library.  The live command makes at most two
-requests per city (one sample and one count/completeness query) plus bounded
-metadata/schema requests.  Source mappings are explicit but tolerate the
-minor field-name differences between the three portals.
-"""
+"""Bounded, failure-safe Socrata feasibility probe (Python standard library)."""
 from __future__ import annotations
-import argparse, csv, json, os, re, sys, time
-from dataclasses import dataclass, asdict
-from datetime import datetime, timedelta, timezone
+import argparse, csv, hashlib, json, os, sys, tempfile, time
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
-ROOT = Path(__file__).parent
 FIELDS = ["city","source_dataset","source_record_id","permit_number","source_url","application_date","issue_date","source_updated_at","observed_at","status_raw","status_normalized","permit_type","work_description","address","postal_code","latitude","longitude","project_valuation","valuation_currency","contractor_names","commercial_classification","classification_evidence","possible_project_group_id"]
 
+# Explicit mappings are accepted only after /api/views/{id} confirms fields.
 SOURCES = {
- "chicago": dict(city="Chicago", dataset="ydr8-5enu", domain="https://data.cityofchicago.org", date="issue_date", id="id", permit="permit_", url="https://data.cityofchicago.org/resource/ydr8-5enu.json"),
- "seattle": dict(city="Seattle", dataset="76t5-zqzr", domain="https://data.seattle.gov", date="issueddate", id="permitnum", permit="permitnum", url="https://data.seattle.gov/resource/76t5-zqzr.json"),
- "austin": dict(city="Austin", dataset="3syk-w9eu", domain="https://data.austintexas.gov", date="issue_date", id="permit_number", permit="permit_number", url="https://data.austintexas.gov/resource/3syk-w9eu.json"),
+ "chicago": {"city":"Chicago","dataset":"ydr8-5enu","domain":"https://data.cityofchicago.org","date":"issue_date","id":"id","permit":"permit_","url":"https://data.cityofchicago.org/resource/ydr8-5enu.json","mapping":{"application":"application_start_date","issue":"issue_date","status":"permit_status","type":"permit_type","description":"work_description","valuation":"reported_cost","postal":"zip_code","updated":"_updated_at","category":"permit_type","address_parts":["street_number","street_direction","street_name","street_type","street_suffix"],"lat":"latitude","lon":"longitude","contractor_fields":[["contractor_1_type","contractor_1_name"],["contractor_2_type","contractor_2_name"],["contractor_3_type","contractor_3_name"],["contractor_4_type","contractor_4_name"],["contractor_5_type","contractor_5_name"],["contractor_6_type","contractor_6_name"],["contractor_7_type","contractor_7_name"],["contractor_8_type","contractor_8_name"],["contractor_9_type","contractor_9_name"],["contractor_10_type","contractor_10_name"]]}},
+ "seattle": {"city":"Seattle","dataset":"76t5-zqzr","domain":"https://data.seattle.gov","date":"issueddate","application_date":"applicationdate","id":"permitnum","permit":"permitnum","url":"https://data.seattle.gov/resource/76t5-zqzr.json","mapping":{"application":"applicationdate","issue":"issueddate","status":"statuscurrent","type":"permitclassmapped","description":"description","updated":"_updated_at","category":"permitclassmapped","address":"originaladdress1","postal":"originalzip","lat":"latitude","lon":"longitude","valuation":"estprojectcost","contractor_fields":[["contractorcompanyname","contractorcompanyname"]]}},
+ "austin": {"city":"Austin","dataset":"3syk-w9eu","domain":"https://data.austintexas.gov","date":"issue_date","id":"permit_number","permit":"permit_number","url":"https://data.austintexas.gov/resource/3syk-w9eu.json","mapping":{"application":"application_date","issue":"issue_date","status":"status_current","type":"permit_type","description":"description","updated":"_updated_at","category":"permit_type","address":"permit_location","postal":"zip_code","lat":"latitude","lon":"longitude","valuation":"est_project_cost","contractor_fields":[["contractor_trade","contractor_company_name"]]}}
 }
-
-ALIASES = {
- "id":["id","permitnum","permit_number","permit"], "permit":["permit_","permitnum","permit_number","permit"],
- "application":["application_start_date","applicationdate","application_date","applieddate","application_date"],
- "issue":["issue_date","issueddate","issued_date"], "updated":["_updated_at","updated_at","lastupdateddate","last_updated"],
- "status":["permit_status","statuscurrent","status","status_current"], "type":["permit_type","permitclassmapped","permitclass","permit_type_desc","permittypedesc"],
- "description":["work_description","description","projectdescription","workdescription"],
- "address":["street_address","originaladdress1","address","project_address","address1"], "postal":["zip_code","originalzip","zip","zipcode"],
- "valuation":["reported_cost","valuation","total_job_valuation","estprojectcost","total_valuation","project_valuation"],
- "contractor":["contractor_company_name","contractor_name","contractorname","contractor_full_name","contractor"],
- "lat":["latitude","lat"], "lon":["longitude","lon","lng"], "location":["location"],
-}
-
-def val(row, key, explicit=None):
-    for k in ([explicit] if explicit else []) + ALIASES.get(key, []):
-        if k and k in row and row[k] not in (None, ""):
-            return row[k]
-    return None
-
-def iso_date(v):
-    if not v: return None
-    return str(v)[:10]
-
-def parse_location(v):
-    if isinstance(v, dict):
-        p = v.get("coordinates") or []
-        if len(p) >= 2: return p[1], p[0]
-        return v.get("latitude"), v.get("longitude")
-    return None, None
-
-def classify(row):
-    # Official categories take precedence. Text is explicitly heuristic.
-    category = " ".join(str(val(row,k) or "") for k in ("type",)) .lower()
-    if any(x in category for x in ("commercial", "non-residential", "non residential")): return "commercial", "source category: " + str(val(row,"type"))
-    if "residential" in category or "single family" in category or "multifamily" in category: return "residential", "source category: " + str(val(row,"type"))
-    text = " ".join(str(val(row,k) or "") for k in ("description","address")).lower()
-    if any(x in text for x in ("office", "warehouse", "retail", "restaurant", "tenant improvement", "commercial")): return "commercial", "heuristic text match: " + text[:300]
-    if any(x in text for x in ("single family", "duplex", "residence", "residential")): return "residential", "heuristic text match: " + text[:300]
-    return "unknown", None
-
-def normalize(row, source, observed):
-    lat, lon = parse_location(val(row,"location"))
-    lat = val(row,"lat") or lat; lon = val(row,"lon") or lon
-    classification, evidence = classify(row)
-    rid = val(row,"id",source["id"]) or val(row,"permit",source["permit"])
-    return {"city":source["city"],"source_dataset":source["dataset"],"source_record_id":rid,"permit_number":val(row,"permit",source["permit"]),"source_url":f"{source['domain']}/d/{source['dataset']}","application_date":iso_date(val(row,"application")),"issue_date":iso_date(val(row,"issue",source["date"])),"source_updated_at":val(row,"updated"),"observed_at":observed,"status_raw":val(row,"status"),"status_normalized":normalize_status(val(row,"status")),"permit_type":val(row,"type"),"work_description":val(row,"description"),"address":val(row,"address"),"postal_code":val(row,"postal"),"latitude":lat,"longitude":lon,"project_valuation":val(row,"valuation"),"valuation_currency":"USD" if val(row,"valuation") is not None else None,"contractor_names":[val(row,"contractor")] if val(row,"contractor") else [],"commercial_classification":classification,"classification_evidence":evidence,"possible_project_group_id":None}
-
+class ProbeError(Exception): pass
+def atom_write(path,data):
+    path=Path(path); path.parent.mkdir(parents=True,exist_ok=True); fd,tmp=tempfile.mkstemp(prefix=f".{path.name}.",dir=path.parent)
+    try:
+        with os.fdopen(fd,"w",encoding="utf-8",newline="") as f: f.write(data); f.flush(); os.fsync(f.fileno())
+        os.replace(tmp,path)
+    finally:
+        if os.path.exists(tmp): os.unlink(tmp)
+def text(v): return None if v in (None,"") else str(v)
+def iso(v): return str(v)[:10] if v not in (None,"") else None
 def normalize_status(v):
     if not v: return None
-    s = str(v).lower()
+    s=str(v).lower()
     if any(x in s for x in ("complete","closed","final")): return "complete"
     if any(x in s for x in ("cancel","void","revok","denied","expired")): return "closed_or_negative"
     if any(x in s for x in ("issued","active","in progress","review","pending")): return "in_progress_or_issued"
     return "other"
-
+def classify(row,s):
+    m=s["mapping"]; field=m.get("category"); raw=text(row.get(field)) if field else None
+    if raw:
+        low=raw.lower()
+        if any(x in low for x in ("commercial","non-residential","non residential")): return "commercial",f"source category {field}={raw}"
+        if any(x in low for x in ("residential","single family","multifamily")): return "residential",f"source category {field}={raw}"
+    desc=text(row.get(m.get("description"))) or ""; low=desc.lower()
+    if any(x in low for x in ("office","warehouse","retail","restaurant","tenant improvement","commercial")): return "commercial",f"heuristic work_description={desc[:300]}"
+    if any(x in low for x in ("single family","duplex","residence","residential")): return "residential",f"heuristic work_description={desc[:300]}"
+    return "unknown",None
+def address(row,s):
+    m=s["mapping"]
+    if m.get("address") and text(row.get(m["address"])): return text(row[m["address"]])
+    return " ".join(text(row.get(x)) for x in m.get("address_parts",[]) if text(row.get(x))) or None
+def contractors(row,s):
+    out=[]
+    for role_field,name_field in s["mapping"].get("contractor_fields",[]):
+        role=text(row.get(role_field)); name=text(row.get(name_field))
+        if role and name and any(x in role.lower() for x in ("contractor","general","electrical","plumbing","mechanical")): out.append(name)
+    return list(dict.fromkeys(out))
+def normalize(row,s,observed):
+    m=s["mapping"]; rid=text(row.get(s["id"]))
+    if not rid: raise ProbeError(f"missing source ID field {s['id']}")
+    cls,evidence=classify(row,s); valuation=row.get(m.get("valuation"))
+    return {"city":s["city"],"source_dataset":s["dataset"],"source_record_id":rid,"permit_number":text(row.get(s["permit"])),"source_url":f"{s['domain']}/d/{s['dataset']}","application_date":iso(row.get(m.get("application"))),"issue_date":iso(row.get(m.get("issue"))),"source_updated_at":text(row.get(m.get("updated"))),"observed_at":observed,"status_raw":text(row.get(m.get("status"))),"status_normalized":normalize_status(row.get(m.get("status"))),"permit_type":text(row.get(m.get("type"))),"work_description":text(row.get(m.get("description"))),"address":address(row,s),"postal_code":text(row.get(m.get("postal"))),"latitude":row.get(m.get("lat")),"longitude":row.get(m.get("lon")),"project_valuation":valuation,"valuation_currency":"USD" if valuation not in (None,"") else None,"contractor_names":contractors(row,s),"commercial_classification":cls,"classification_evidence":evidence,"possible_project_group_id":None}
 class Client:
-    def __init__(self, retries=2): self.retries=retries; self.requests=0; self.retries_used=0; self.bytes=0; self.errors=[]
-    def get(self, url, params):
-        full=url+"?"+urlencode(params); last=None
+    def __init__(self,retries=2): self.retries=retries; self.requests=0; self.retries_used=0; self.bytes=0; self.errors=[]
+    def get(self,url,params=None):
+        full=url+("?"+urlencode(params) if params else ""); last=None
         for attempt in range(self.retries+1):
             if attempt: self.retries_used+=1; time.sleep(min(2**attempt,4))
             self.requests+=1
             try:
-                req=Request(full,headers={"User-Agent":"commercial-permit-feasibility-probe/1.0"})
-                with urlopen(req,timeout=25) as r:
-                    body=r.read(); self.bytes+=len(body); return json.loads(body)
+                req=Request(full,headers={"User-Agent":"commercial-permit-feasibility-probe/2.0"})
+                with urlopen(req,timeout=25) as r: body=r.read(); self.bytes+=len(body); return json.loads(body)
             except (HTTPError,URLError,TimeoutError,ValueError) as e: last=str(e)
-        self.errors.append({"url":full,"error":last}); raise RuntimeError(last)
-
-def query_city(client, source, since, until, limit):
-    where=f"{source['date']} between '{since}T00:00:00' and '{until}T23:59:59'"
-    order=f"{source['date']} DESC, {source['id']} ASC"
-    sample=client.get(source["url"],{"$where":where,"$order":order,"$limit":min(limit,100)})
-    count=client.get(source["url"],{"$select":"count(*) as n","$where":where})
-    return sample, int(count[0]["n"]) if count else 0, where, order
-
-def write_rows(rows, path):
-    path.parent.mkdir(parents=True,exist_ok=True)
-    with path.open("w",newline="",encoding="utf-8") as f:
-        w=csv.DictWriter(f,fieldnames=FIELDS); w.writeheader()
-        for r in rows: w.writerow({k:json.dumps(r[k],ensure_ascii=False) if isinstance(r[k],(list,dict)) else r[k] for k in FIELDS})
-    with path.with_suffix(".jsonl").open("w",encoding="utf-8") as f:
-        for r in rows: f.write(json.dumps(r,ensure_ascii=False)+"\n")
-
-def live(args):
-    until=datetime.now(timezone.utc).date(); since=until-timedelta(days=30); observed=datetime.now(timezone.utc).isoformat()
-    client=Client(args.retries); allrows=[]; meta={"observed_at":observed,"window":{"since":str(since),"until":str(until)},"cities":{},"resource":{"requests":0,"retries":0,"bytes_received":0,"errors":[]}}
-    for name in args.cities:
-        s=SOURCES[name]; start=time.monotonic()
-        try:
-            raw,n,where,order=query_city(client,s,since,until,args.limit)
-            rows=[normalize(x,s,observed) for x in raw]; allrows+=rows
-            meta["cities"][name]={"records_returned":len(rows),"full_window_count":n,"sample_completeness":{k:sum(r.get(k) not in (None,[],"") for r in rows)/len(rows) if rows else 0 for k in FIELDS},"where":where,"order":order,"elapsed_seconds":round(time.monotonic()-start,3),"errors":[]}
-        except Exception as e:
-            meta["cities"][name]={"records_returned":0,"full_window_count":None,"errors":[str(e)],"elapsed_seconds":round(time.monotonic()-start,3)}
-    meta["resource"]={"requests":client.requests,"retries":client.retries_used,"bytes_received":client.bytes,"errors":client.errors}
-    output_path=Path(args.out)
-    failed_cities=sum(bool(x.get("errors")) for x in meta["cities"].values())
-    if not allrows and failed_cities == len(args.cities) and output_path.exists():
-        meta["snapshot_write"]="skipped: every city failed; existing output preserved"
-    else:
-        write_rows(allrows,output_path); meta["snapshot_write"]="written"
-    output_path.with_name("run_metrics.json").write_text(json.dumps(meta,indent=2)+"\n")
-    print(json.dumps(meta,indent=2))
-
+        self.errors.append({"url":full,"error":last}); raise ProbeError(last)
+def validate_schema(client,s):
+    meta=client.get(f"{s['domain']}/api/views/{s['dataset']}"); names={c.get("fieldName") for c in meta.get("columns",[])}; m=s["mapping"]
+    required=[s["id"],s["permit"],s["date"],m.get("status"),m.get("type"),m.get("description")]; missing=[x for x in required if x and x not in names]
+    if missing: raise ProbeError(f"schema missing explicit fields: {missing}")
+    s["schema_fields"]=sorted(x for x in names if x); s["schema_metadata_url"]=f"{s['domain']}/api/views/{s['dataset']}"; return meta
+def query_city(client,s,since,until,limit,cohort):
+    field=s["mapping"]["issue"] if cohort=="issued" else s["mapping"].get("application")
+    if not field: raise ProbeError(f"no verified application field for {s['city']}")
+    where=f"{field} between '{since}T00:00:00' and '{until}T23:59:59'"; order=f"{field} DESC, {s['id']} ASC"
+    rows=client.get(s["url"],{"$where":where,"$order":order,"$limit":min(100,limit)}); count=client.get(s["url"],{"$select":"count(*) as n","$where":where})
+    return rows,int(count[0]["n"]) if count else 0,where,order
+def identity(row):
+    ds=row.get("source_dataset"); rid=row.get("source_record_id")
+    if not ds or not rid: raise ProbeError("missing source-scoped identity")
+    return str(ds),str(rid)
+def load_rows(path):
+    out={}
+    for line in Path(path).read_text(encoding="utf-8").splitlines():
+        if not line.strip(): continue
+        row=json.loads(line); key=identity(row)
+        if key in out: raise ProbeError(f"duplicate identity: {key}")
+        out[key]=row
+    return out
+def event(kind,key,row,changes=None):
+    body={"event_type":kind,"source_dataset":key[0],"source_record_id":key[1],"changes":changes or {},"record":row if kind=="new" else None}; digest=hashlib.sha256(json.dumps(body,sort_keys=True,separators=(",",":")).encode()).hexdigest()[:20]; body["event_id"]=f"{kind}:{key[0]}:{key[1]}:{digest}"; return body
 def compare(old,new,out):
-    def load(p):
-        return {str(x.get("source_record_id")):x for x in (json.loads(l) for l in Path(p).read_text().splitlines() if l.strip())}
-    a,b=load(old),load(new); events=[]
-    for k in sorted(set(b)-set(a)): events.append(event("new",b[k]))
+    a,b=load_rows(old),load_rows(new); events=[]
+    for k in sorted(set(b)-set(a)): events.append(event("new",k,b[k]))
     for k in sorted(set(a)&set(b)):
         changes={f:{"old":a[k].get(f),"new":b[k].get(f)} for f in ("status_raw","project_valuation","work_description","contractor_names") if a[k].get(f)!=b[k].get(f)}
-        if changes: events.append({"event_id":f"changed:{b[k]['source_dataset']}:{k}","event_type":"changed","source_record_id":k,"changes":changes})
-    Path(out).write_text("".join(json.dumps(x,ensure_ascii=False)+"\n" for x in events)); print(json.dumps({"new":sum(x["event_type"]=="new" for x in events),"changed":sum(x["event_type"]=="changed" for x in events),"output":out},indent=2))
-
-def event(kind,row): return {"event_id":f"{kind}:{row['source_dataset']}:{row['source_record_id']}","event_type":kind,"source_record_id":row["source_record_id"],"record":row}
-
+        if changes: events.append(event("changed",k,b[k],changes))
+    atom_write(out,"".join(json.dumps(x,ensure_ascii=False,sort_keys=True)+"\n" for x in events)); return events
+def csv_text(rows):
+    import io; out=io.StringIO(); w=csv.DictWriter(out,fieldnames=FIELDS); w.writeheader()
+    for r in rows: w.writerow({k:json.dumps(r[k],ensure_ascii=False) if isinstance(r[k],(list,dict)) else r[k] for k in FIELDS})
+    return out.getvalue()
+def run_live(args):
+    observed=datetime.now(timezone.utc); end=date.fromisoformat(args.until) if args.until else observed.date(); start=date.fromisoformat(args.since) if args.since else end-timedelta(days=30)
+    if start>end: raise ProbeError("since must not be after until")
+    c=Client(args.retries); stamp=observed.strftime("%Y%m%dT%H%M%SZ"); root=Path(args.out).parent; snap=root/"snapshots"/stamp; baseline=root/"baselines"; rows=[]; manifest={"observed_at":observed.isoformat(),"window":{"since":str(start),"until":str(end),"timezone":"UTC","semantics":"inclusive whole UTC dates"},"cities":{},"cohorts":{},"resource":{}}
+    for name in args.cities:
+        s=SOURCES[name]; t=time.monotonic(); city_rows=[]; status={"status":"failed","records_returned":0,"errors":[]}
+        try:
+            validate_schema(c,s); cohorts=["issued","in_progress"] if name=="seattle" and args.seattle_in_progress else ["issued"]
+            for cohort in cohorts:
+                raw,n,where,order=query_city(c,s,start,end,args.limit,cohort); normalized=[normalize(x,s,observed.isoformat()) for x in raw]
+                for x in normalized: x["cohort"]=cohort
+                atom_write(snap/name/f"{cohort}_raw.jsonl","".join(json.dumps(x,ensure_ascii=False)+"\n" for x in raw)); manifest["cohorts"][f"{name}:{cohort}"]={"records_returned":len(normalized),"full_window_count":n,"where":where,"order":order}
+                city_rows += normalized
+            keys=[identity(x) for x in city_rows]
+            if len(keys)!=len(set(keys)): raise ProbeError("duplicate source-scoped identity in city result")
+            status["records_returned"]=len(city_rows); status["status"]="verified_empty" if not city_rows and all(manifest["cohorts"][f"{name}:{x}"]["full_window_count"]==0 for x in cohorts) else "success"
+            atom_write(snap/name/"normalized.jsonl","".join(json.dumps(x,ensure_ascii=False)+"\n" for x in city_rows)); atom_write(snap/name/"normalized.csv",csv_text(city_rows)); atom_write(baseline/f"{name}.jsonl","".join(json.dumps(x,ensure_ascii=False)+"\n" for x in city_rows)); rows += city_rows
+        except Exception as e: status["errors"]=[str(e)]
+        status["elapsed_seconds"]=round(time.monotonic()-t,3); manifest["cities"][name]=status
+    manifest["resource"]={"requests":c.requests,"retries":c.retries_used,"bytes_received":c.bytes,"errors":c.errors}; manifest["complete"]=all(x["status"] in ("success","verified_empty") for x in manifest["cities"].values())
+    if rows: atom_write(args.out,csv_text(rows)); atom_write(Path(args.out).with_suffix(".jsonl"),"".join(json.dumps(x,ensure_ascii=False)+"\n" for x in rows))
+    atom_write(snap/"manifest.json",json.dumps(manifest,indent=2)+"\n"); atom_write(root/"run_metrics.json",json.dumps(manifest,indent=2)+"\n"); print(json.dumps(manifest,indent=2)); return 0 if manifest["complete"] else 2
 def main():
-    p=argparse.ArgumentParser(); sub=p.add_subparsers(dest="cmd",required=True)
-    l=sub.add_parser("live"); l.add_argument("--cities",nargs="+",choices=SOURCES,default=list(SOURCES)); l.add_argument("--limit",type=int,default=100); l.add_argument("--retries",type=int,default=2); l.add_argument("--out",default="outputs/live.csv"); l.set_defaults(func=live)
-    c=sub.add_parser("compare"); c.add_argument("old"); c.add_argument("new"); c.add_argument("--out",default="outputs/events.jsonl"); c.set_defaults(func=lambda a:compare(a.old,a.new,a.out))
-    a=p.parse_args(); a.func(a)
+    p=argparse.ArgumentParser(); sub=p.add_subparsers(dest="cmd",required=True); l=sub.add_parser("live"); l.add_argument("--cities",nargs="+",choices=SOURCES,default=list(SOURCES)); l.add_argument("--limit",type=int,default=100); l.add_argument("--retries",type=int,default=2); l.add_argument("--since"); l.add_argument("--until"); l.add_argument("--seattle-in-progress",action="store_true"); l.add_argument("--out",default="outputs/live.csv"); l.set_defaults(func=run_live); c=sub.add_parser("compare"); c.add_argument("old"); c.add_argument("new"); c.add_argument("--out",default="outputs/events.jsonl"); c.set_defaults(func=lambda a:(print(json.dumps({"events":len(compare(a.old,a.new,a.out)),"output":a.out},indent=2)) or 0)); a=p.parse_args()
+    try: raise SystemExit(a.func(a))
+    except ProbeError as e: print(f"error: {e}",file=sys.stderr); raise SystemExit(2)
 if __name__=="__main__": main()
