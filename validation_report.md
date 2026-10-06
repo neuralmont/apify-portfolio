@@ -8,9 +8,11 @@ Exact macOS Terminal rerun commands:
 cd /Users/johnmcmanus/Documents/ChatGPT/apify-portfolio
 mkdir -p outputs
 END=$(date -u +%F); START=$(date -u -v-30d +%F)
-python3 probe.py live --cities chicago seattle austin --limit 100 --since "$START" --until "$END" --seattle-in-progress --out outputs/live.csv > "outputs/live-$(date -u +%Y%m%dT%H%M%SZ).stdout.json"
-echo "exit=$?"
-cat outputs/run_metrics.json
+LOG="outputs/live-$(date -u +%Y%m%dT%H%M%SZ).stdout.json"
+python3 probe.py live --cities chicago seattle austin --limit 100 --since "$START" --until "$END" --seattle-in-progress --out outputs/live.csv > "$LOG"; rc=$?
+echo "exit=$rc"
+python3 -c 'import json; d=json.load(open("outputs/run_metrics.json")); print(" ".join(f"{city}={v.get(\"errors\") or \"ok\"}" for city,v in d["cities"].items()))'
+exit "$rc"
 ```
 
 The command intentionally returns exit code 2 when one or more requested cities fail. It still saves timestamped raw/normalized observations and diagnostics, and preserves each previously successful city baseline. The manifest contains immutable `previous_baseline` and `current_snapshot` paths for a safe comparison.
