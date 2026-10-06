@@ -1,32 +1,62 @@
-# Austin Commercial Permits — local Actor beta
+# Austin Commercial Building Permits & Contractor Activity
 
-This is a bounded, local Apify Actor beta for Austin’s official [Issued Construction Permits](https://data.austintexas.gov/d/3syk-w9eu) dataset. It is intentionally limited to issued permits and does not enrich records, infer commercial use, or claim demand, market share, publication latency, or longitudinal reliability.
+Find recently issued commercial building permits in Austin's official public [Issued Construction Permits dataset](https://data.austintexas.gov/d/3syk-w9eu). This private beta is intended first for construction suppliers researching contractor activity.
 
-The Actor verifies the dataset schema before querying, applies filters in Socrata SoQL, paginates deterministically by `issue_date DESC, permit_number ASC`, preserves source values, and emits a machine-readable `RUN_SUMMARY`. A contractor summary is a JSON artifact in the run’s default key-value store and describes activity within the delivered permit records only; its counts are not project counts and are isolated to each run.
+The Actor returns source permit records; a permit is not a distinct construction project, a qualified lead, or evidence of demand. It does not enrich records, infer commercial use from address text, or claim exclusivity, guaranteed freshness, or complete territory coverage.
 
-## Inputs
+## What it does
 
-The input schema is in `.actor/input_schema.json`. Defaults are the most recent seven calendar dates in `America/Chicago`, inclusive, `Commercial`, and at most 100 records. `issue_date` is a source date-only field: the Actor sends the selected dates as inclusive source boundaries and does not label them UTC timestamps.
+- Verifies the official Austin Socrata schema before querying.
+- Filters by inclusive issue-date calendar window, source commercial/residential classification, permit type, contractor trade, description keywords, and presence of a contractor company name.
+- Delivers permit records to the run's default dataset in JSON or CSV export formats.
+- Writes `RUN_SUMMARY`, `SCHEMA_METADATA`, and an optional `CONTRACTOR_SUMMARY` to the run's default key-value store.
+- Limits a run to 1–5,000 delivered permit records. Reaching the cap is a successful, explicitly truncated result; request, record, duplicate, or pagination errors are reported as incomplete.
 
-Supported source filters are the verified Austin values `BP`, `EP`, `MP`, `PP`, `DS` and the source contractor trades `General Contractor`, `Electrical Contractor`, `Plumbing Contractor`, and `Mechanical Contractor`. `permitClass` may be `Commercial`, `Residential`, or `All`. `descriptionKeywords`, `requireContractor`, `maxResults` (1–5000), and `includeContractorSummary` are optional.
+The contractor summary groups the exact source company and trade values found in delivered records. Its counts describe activity within those delivered permit records and are not counts of distinct projects or leads. The summary has no separate charge.
 
-## Local run
+## Pricing
 
-From this directory, with Python 3.9+:
+Proposed paid-beta pricing is `$0.003` per delivered permit record (`$3 per 1,000`). Only visible permit records use the `permit-record` pay-per-event. Source counts, discarded duplicates, diagnostics, and contractor-summary rows are not charged. Platform usage is configured as included in the PPE setup. Customer spending limits can stop a run after a partial delivery; `RUN_SUMMARY` preserves the delivered count and reason.
 
-```bash
-python3 -m venv .venv
-. .venv/bin/activate
-pip install -r requirements.txt
-python run_local.py --input input.json --output-dir local_output
+Pricing is prepared but customer charging remains disabled while this Actor is private. See [PRICING_CONFIGURATION.md](PRICING_CONFIGURATION.md) for the review checklist; do not enable it until the release checklist is approved.
+
+## Example input
+
+```json
+{
+  "startDate": "2026-09-30",
+  "endDate": "2026-10-06",
+  "permitClass": "Commercial",
+  "permitTypes": ["BP", "MP"],
+  "contractorTrades": ["General Contractor"],
+  "requireContractor": true,
+  "includeContractorSummary": true,
+  "maxResults": 100
+}
 ```
 
-The dependency-free core can also be tested without installing the SDK. Reaching `maxResults` without errors is successful with `cap_truncated: true` and an explicit full-window truncation reason. Request failures, invalid records, duplicate IDs, repeated pages, and inconsistent pagination produce `completion: incomplete`; the local runner exits status 2 after preserving delivered records and diagnostics. The Actor runtime raises after pushing delivered records when `RUN_SUMMARY.completion` is `incomplete`.
+`issue_date` is a source date-only value. The dates are inclusive calendar boundaries interpreted in `America/Chicago`; the Actor does not claim UTC timestamp precision. Defaults are the latest seven calendar dates and `Commercial` with a 100-record cap.
 
-## Actor run
+## Small real output sample
 
-The Dockerfile uses the current Apify Python base image and installs the pinned major-version SDK range. Build and run locally with the Apify CLI or Docker from this nested directory. The Actor writes permit records to the default dataset and `RUN_SUMMARY`, `SCHEMA_METADATA`, and `CONTRACTOR_SUMMARY` JSON artifacts to the run’s default key-value store. It does not publish, schedule, configure billing, or deploy anything.
+```json
+{
+  "source_record_id": "2025-143684 BP",
+  "issue_date": "2026-10-05T00:00:00.000",
+  "source_permit_type": "BP",
+  "source_class": "Commercial",
+  "work_description": "Adding a Ramp to Interior Area for Staff Personal for Existing Grocery Store",
+  "project_address": "2400 S CONGRESS AVE",
+  "contractor_name": "Trusted General Contracting",
+  "contractor_trade": "General Contractor",
+  "project_valuation": null
+}
+```
 
-## Interpretation limits
+This is a small observation sample, not a promise that every future record has the same completeness. Missing source values remain `null`.
 
-The source class is preserved as `source_class`; no fallback text inference is performed by the Actor. Missing source values remain null. The issued-only source cannot identify unissued or in-progress applications. A `maxResults` cap marks the full source window as truncated but is successful when the requested rows were delivered without errors. Repeated runs are observations, not a guarantee of freshness or complete territory coverage.
+## Exports and interpretation
+
+Open the run's default dataset and choose JSON, CSV, or another Apify-supported export. Open `RUN_SUMMARY` for source counts, delivered rows, truncation, errors, pagination, and resource diagnostics. Open `CONTRACTOR_SUMMARY` for run-local contractor activity. Compare contractor names and supporting permit IDs as activity indicators, not as project counts or qualified leads.
+
+For a step-by-step workflow, see [TUTORIAL.md](TUTORIAL.md). For release status and private verification, see [LAUNCH_READINESS.md](LAUNCH_READINESS.md).

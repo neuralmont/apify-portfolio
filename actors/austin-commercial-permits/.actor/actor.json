@@ -1,9 +1,9 @@
 {
   "actorSpecification": 1,
   "name": "austin-commercial-permits",
-  "title": "Austin Commercial Permits & Contractor Activity",
-  "description": "Retrieves Austin issued construction permits with source-reported commercial classification and contractor activity. Permit records are not qualified leads or project confirmations.",
-  "version": "0.1",
+  "title": "Austin Commercial Building Permits & Contractor Activity",
+  "description": "Search Austin's official issued construction permits by source-reported commercial classification and contractor filters. Includes run-local contractor activity; records are not qualified leads or project confirmations.",
+  "version": "0.2",
   "buildTag": "latest",
   "dockerContextDir": "..",
   "dockerfile": "./Dockerfile",

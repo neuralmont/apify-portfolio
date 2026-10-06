@@ -133,3 +133,107 @@ class ActorOutputTests(unittest.TestCase):
         self.assertIn("CONTRACTOR_SUMMARY", values)
         self.assertNotIn("contractor-summary", values)
         self.assertEqual(len(pushed), 1)
+
+    def _run_billing_actor(self, fake_actor, records):
+        original_actor = actor_main.Actor
+        original_run = actor_main.run_extraction
+        actor_main.Actor = fake_actor
+        actor_main.run_extraction = lambda data: {
+            "records": records,
+            "contractor_summary": [{"contractor_name_original": "Acme Builders LLC", "delivered_permit_count": 1}],
+            "summary": {"completion": "complete", "errors": []},
+            "schema": {"verified_fields": []},
+        }
+        try:
+            asyncio.run(actor_main.main())
+        finally:
+            actor_main.Actor = original_actor
+            actor_main.run_extraction = original_run
+
+    def test_ppe_charges_only_delivered_permit_records(self):
+        class ChargeResult:
+            charged_count = 1
+            event_charge_limit_reached = False
+
+        class Pricing:
+            is_pay_per_event = True
+
+        class Manager:
+            def get_pricing_info(self): return Pricing()
+
+        class FakeActor:
+            def __init__(self): self.pushes = []; self.values = {}
+            async def __aenter__(self): return self
+            async def __aexit__(self, *args): return False
+            async def get_input(self): return {"startDate":"2026-10-01", "endDate":"2026-10-06"}
+            def get_charging_manager(self): return Manager()
+            async def push_data(self, item, **kwargs): self.pushes.append((item, kwargs)); return ChargeResult()
+            async def set_value(self, key, value): self.values[key] = value
+
+        fake = FakeActor()
+        self._run_billing_actor(fake, [
+            {"source_record_id": "A-1", "contractor_name": "Delivered Co", "contractor_trade": "General Contractor", "issue_date": "2026-10-01"},
+            {"source_record_id": "A-2", "contractor_name": "Not Delivered Co", "contractor_trade": "General Contractor", "issue_date": "2026-10-02"},
+        ])
+        self.assertEqual(len(fake.pushes), 2)
+        self.assertEqual([call[1]["charged_event_name"] for call in fake.pushes], ["permit-record", "permit-record"])
+        self.assertEqual(fake.values["RUN_SUMMARY"]["billing"]["charged_records"], 2)
+        self.assertEqual(fake.values["RUN_SUMMARY"]["billing"]["summary_rows_charged"], 0)
+
+    def test_customer_limit_preserves_partial_delivery_and_stops_cleanly(self):
+        class ChargeResult:
+            def __init__(self, charged_count, limited):
+                self.charged_count = charged_count
+                self.event_charge_limit_reached = limited
+
+        class Pricing: is_pay_per_event = True
+        class Manager:
+            def get_pricing_info(self): return Pricing()
+
+        class FakeActor:
+            def __init__(self): self.calls = 0; self.values = {}; self.exit_called = False
+            async def __aenter__(self): return self
+            async def __aexit__(self, *args): return False
+            async def get_input(self): return {"startDate":"2026-10-01", "endDate":"2026-10-06"}
+            def get_charging_manager(self): return Manager()
+            async def push_data(self, item, **kwargs):
+                self.calls += 1
+                return ChargeResult(1, self.calls == 1)
+            async def set_value(self, key, value): self.values[key] = value
+            async def exit(self, **kwargs): self.exit_called = True
+
+        fake = FakeActor()
+        self._run_billing_actor(fake, [
+            {"source_record_id": "A-1", "contractor_name": "Delivered Co", "contractor_trade": "General Contractor", "issue_date": "2026-10-01"},
+            {"source_record_id": "A-2", "contractor_name": "Not Delivered Co", "contractor_trade": "General Contractor", "issue_date": "2026-10-02"},
+        ])
+        summary = fake.values["RUN_SUMMARY"]
+        self.assertEqual(fake.calls, 1)
+        self.assertTrue(fake.exit_called)
+        self.assertEqual(summary["records_delivered"], 1)
+        self.assertTrue(summary["billing"]["billing_limit_reached"])
+        self.assertIn("spending limit", summary["errors"][0])
+        self.assertEqual(summary["billing"]["summary_rows_charged"], 0)
+        self.assertEqual(fake.values["CONTRACTOR_SUMMARY"][0]["contractor_name_original"], "Delivered Co")
+
+    def test_transport_failure_is_not_blindly_retried_or_double_charged(self):
+        class Pricing: is_pay_per_event = True
+        class Manager:
+            def get_pricing_info(self): return Pricing()
+
+        class FakeActor:
+            def __init__(self): self.calls = 0; self.values = {}
+            async def __aenter__(self): return self
+            async def __aexit__(self, *args): return False
+            async def get_input(self): return {"startDate":"2026-10-01", "endDate":"2026-10-06"}
+            def get_charging_manager(self): return Manager()
+            async def push_data(self, item, **kwargs):
+                self.calls += 1
+                raise RuntimeError("ambiguous transport failure")
+            async def set_value(self, key, value): self.values[key] = value
+
+        fake = FakeActor()
+        with self.assertRaises(Exception):
+            self._run_billing_actor(fake, [{"source_record_id": "A-1"}])
+        self.assertEqual(fake.calls, 1)
+        self.assertIn("ambiguous transport failure", fake.values["RUN_SUMMARY"]["errors"][0])

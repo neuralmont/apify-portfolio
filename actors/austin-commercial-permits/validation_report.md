@@ -37,7 +37,7 @@ The output directory contains `permits.jsonl`, `contractor_summary.jsonl`, and `
 
 ## Verification layers and private benchmark
 
-Local extraction is verified by the dependency-free runner and unit tests. The current repository has Apify CLI 1.2.1, while the current npm CLI 1.10.0 was used for schema validation. Docker and Podman are not installed in this environment, so container verification could not be performed. Apify cloud verification was not performed; the live HTTPS observation above is a local process observation, not an Apify cloud run.
+Local extraction is verified by the dependency-free runner and unit tests. The current repository has Apify CLI 1.2.1, while the current npm CLI 1.10.0 was used for schema validation. Docker and Podman are not installed in this environment, so container verification could not be performed. Apify cloud verification was completed privately on build `rgIovT5VBdeaVQ8cv`; the live HTTPS observation above is a local process observation, distinct from those cloud runs.
 
 The current CLI schema commands and results were:
 
@@ -112,6 +112,12 @@ No runs were started for this review. The four existing runs used the same inclu
 
 Each run’s key-value store contained `RUN_SUMMARY` and `CONTRACTOR_SUMMARY`. Contractor summary group/count checks were respectively 60 groups/87 delivered permits, 613/1,347, 1,457/4,598, and 60/87; all summaries had `extraction_incomplete: false`. The distinct store IDs and matching per-run counts verify isolation. Build cost was $0.0033731111 and is separate from run usage. The sanitized machine-readable evidence is `evidence/private_run_comparison_20261006.json`.
 
+## Paid-beta preparation
+
+The proposed price is `$0.003` per delivered permit record. The implementation uses the official Python SDK's `push_data(..., charged_event_name="permit-record")` shortcut only when the run is in PPE mode. It records `charged_count` and `event_charge_limit_reached`, preserves partial delivery in `RUN_SUMMARY`, and exits cleanly at a customer spending limit. The SDK owns idempotency and transport retries; the Actor does not blindly retry an ambiguous push. Summary artifacts, source counts, and rejected duplicates are not charged. Charging is not configured or enabled on the private Actor.
+
+The proposed Console setup, listing metadata, tutorial, and 30-day measurement plan are in `PRICING_CONFIGURATION.md`, `LISTING_METADATA.md`, `TUTORIAL.md`, and `LAUNCH_MEASUREMENT_PLAN.md`. The four prior benchmark runs remain operational tests and are excluded from customer metrics.
+
 ## Remaining limitations
 
-This beta covers only issued permits in Austin’s dataset. It does not identify unissued applications or guarantee current publication timing. The Actor preserves source classification and does not infer it from addresses or descriptions. Missing valuations and coordinates remain missing. Contractor summaries group exact source company/trade values and count delivered permit records, not distinct projects. No billing, publishing, scheduling, enrichment, or Apify deployment was performed.
+This beta covers only issued permits in Austin’s dataset. It does not identify unissued applications or guarantee current publication timing. The Actor preserves source classification and does not infer it from addresses or descriptions. Missing valuations and coordinates remain missing. Contractor summaries group exact source company/trade values and count delivered permit records, not distinct projects. Customer billing, publishing, and scheduling remain disabled; no enrichment was added.
