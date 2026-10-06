@@ -1,0 +1,7 @@
+{
+  "title":"Austin permit run summary",
+  "description":"Key-value output named RUN_SUMMARY describes extraction completeness, counts, filters, resource usage, and limitations.",
+  "properties": {
+    "RUN_SUMMARY": {"type":"object","template":{"completion":"{{completion}}","recordsDelivered":"{{recordsDelivered}}","matchingSourceCount":"{{matchingSourceCount}}"}}
+  }
+}

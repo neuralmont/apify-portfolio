@@ -1,0 +1,5 @@
+{
+  "permitClass": "Commercial",
+  "maxResults": 5000,
+  "includeContractorSummary": true
+}

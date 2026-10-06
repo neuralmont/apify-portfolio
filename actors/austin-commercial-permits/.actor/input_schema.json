@@ -1,0 +1,18 @@
+{
+  "title": "Austin Commercial Permits input",
+  "description": "Inclusive local-date filtering over Austin's official Issued Construction Permits dataset. Defaults to the most recent seven calendar dates in America/Chicago and commercial permits.",
+  "type": "object",
+  "schemaVersion": 1,
+  "properties": {
+    "startDate": {"title":"Start date","type":"string","description":"Inclusive YYYY-MM-DD source date. If omitted, defaults with endDate to the most recent seven America/Chicago calendar dates.","editor":"datepicker","pattern":"^\\d{4}-\\d{2}-\\d{2}$"},
+    "endDate": {"title":"End date","type":"string","description":"Inclusive YYYY-MM-DD source date. Source issue_date is date-only; no timezone is inferred.","editor":"datepicker","pattern":"^\\d{4}-\\d{2}-\\d{2}$"},
+    "permitClass": {"title":"Permit class","type":"string","description":"Source permit class filter. Commercial is the default and uses permit_class_mapped exactly.","default":"Commercial","enum":["Commercial","Residential","All"]},
+    "permitTypes": {"title":"Permit types","type":"array","description":"Optional source permit type codes. Allowed values: BP, EP, MP, PP, DS.","editor":"select","items":{"type":"string","enum":["BP","EP","MP","PP","DS"]}},
+    "contractorTrades": {"title":"Contractor trades","type":"array","description":"Optional source contractor trade filters.","editor":"select","items":{"type":"string","enum":["General Contractor","Electrical Contractor","Plumbing Contractor","Mechanical Contractor"]}},
+    "descriptionKeywords": {"title":"Description keywords","type":"string","description":"Optional comma-separated, case-insensitive OR terms matched against description server-side.","editor":"textfield"},
+    "requireContractor": {"title":"Require contractor","type":"boolean","description":"Only return records with a non-empty contractor company name.","default":false},
+    "maxResults": {"title":"Maximum results","type":"integer","description":"Maximum delivered permits. The actor never returns more than 5,000.","default":100,"minimum":1,"maximum":5000},
+    "includeContractorSummary": {"title":"Include contractor summary","type":"boolean","description":"Write a separate activity-within-delivered-records summary artifact/dataset.","default":true}
+  },
+  "additionalProperties": false
+}

@@ -1,0 +1,11 @@
+{
+  "actorSpecification": 1,
+  "fields": {
+    "source_record_id": {"label":"Source record ID","type":"string"},
+    "permit_number": {"label":"Permit number","type":"string"},
+    "issue_date": {"label":"Issued date","type":"string"},
+    "permit_class": {"label":"Source permit class","type":"string"},
+    "contractor_name": {"label":"Contractor name","type":"string"},
+    "project_valuation": {"label":"Source valuation","type":"number"}
+  }
+}
