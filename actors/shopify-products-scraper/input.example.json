@@ -1,0 +1,8 @@
+{
+  "storeUrls": ["https://example.myshopify.com"],
+  "productUrls": ["https://example.myshopify.com/products/example-product"],
+  "maxProducts": 100,
+  "requestTimeoutSecs": 30,
+  "retries": 2,
+  "maxConcurrencyPerDomain": 2
+}

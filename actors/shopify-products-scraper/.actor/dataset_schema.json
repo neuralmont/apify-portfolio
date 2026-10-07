@@ -1,0 +1,33 @@
+{
+  "actorSpecification": 1,
+  "title": "Shopify public product records",
+  "description": "Source-preserving public storefront products with nested variants. Availability is not inventory quantity.",
+  "fields": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "type": "object",
+    "properties": {
+      "store_url": {"title":"Store URL","type":"string"},
+      "product_id": {"title":"Product ID","type":["string","null"]},
+      "handle": {"title":"Product handle","type":["string","null"]},
+      "canonical_product_url": {"title":"Canonical product URL","type":["string","null"]},
+      "title": {"title":"Product title","type":["string","null"]},
+      "vendor": {"title":"Vendor","type":["string","null"]},
+      "product_type": {"title":"Product type","type":["string","null"]},
+      "tags": {"title":"Tags","type":["array","null"],"items":{"type":"string"}},
+      "description_text": {"title":"Description text","type":["string","null"]},
+      "description_html": {"title":"Description HTML","type":["string","null"]},
+      "images": {"title":"Images","type":["array","null"]},
+      "source_created_at": {"title":"Source created timestamp","type":["string","null"]},
+      "source_published_at": {"title":"Source published timestamp","type":["string","null"]},
+      "source_updated_at": {"title":"Source updated timestamp","type":["string","null"]},
+      "observed_at": {"title":"Observation timestamp","type":"string"},
+      "currency_code": {"title":"Presentment currency code","type":["string","null"]},
+      "currency_context": {"title":"Currency context","type":["string","null"]},
+      "money_source_unit": {"title":"Source monetary unit","type":["string","null"]},
+      "variants": {"title":"Variants","type":"array","items":{"type":"object"}},
+      "source_endpoint": {"title":"Source endpoint","type":"string"}
+    },
+    "required": ["store_url","product_id","handle","canonical_product_url","title","observed_at","variants","source_endpoint"]
+  },
+  "views": {"overview":{"title":"Products","transformation":{"fields":["store_url","product_id","handle","title","vendor","product_type","currency_code","variants","canonical_product_url"]},"display":{"component":"table"}}}
+}

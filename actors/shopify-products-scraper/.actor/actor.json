@@ -1,0 +1,14 @@
+{
+  "actorSpecification": 1,
+  "name": "shopify-products-scraper",
+  "title": "Shopify Products Scraper",
+  "description": "Extract public Shopify storefront products and nested variants from supplied store or product URLs. Results preserve source-reported values and clearly report unsupported stores.",
+  "version": "0.1",
+  "buildTag": "latest",
+  "dockerContextDir": "..",
+  "dockerfile": "./Dockerfile",
+  "readme": "./README.md",
+  "input": "./input_schema.json",
+  "output": "./output_schema.json",
+  "storages": {"dataset": "./dataset_schema.json"}
+}

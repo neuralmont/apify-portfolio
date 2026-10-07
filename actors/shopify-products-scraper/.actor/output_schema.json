@@ -1,0 +1,10 @@
+{
+  "actorOutputSchemaVersion": 1,
+  "title": "Shopify product extraction outputs",
+  "description": "One default-dataset record per delivered product, with nested variants. RUN_SUMMARY and SCHEMA_METADATA are run-local key-value records.",
+  "properties": {
+    "productResults": {"type":"string","title":"Product results","description":"Product records with nested variants in the run's default dataset.","template":"{{links.apiDefaultDatasetUrl}}/items"},
+    "runSummary": {"type":"string","title":"RUN_SUMMARY","description":"Per-store outcomes, counts, duplicate and pagination diagnostics, truncation, errors, and resource usage.","template":"{{links.apiDefaultKeyValueStoreUrl}}/records/RUN_SUMMARY"},
+    "schemaMetadata": {"type":"string","title":"SCHEMA_METADATA","description":"Endpoint and monetary-context limitations used by this run.","template":"{{links.apiDefaultKeyValueStoreUrl}}/records/SCHEMA_METADATA"}
+  }
+}

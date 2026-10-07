@@ -1,0 +1,15 @@
+{
+  "title": "Shopify Products Scraper input",
+  "description": "Extract public products from supplied Shopify storefront or product URLs. The Actor does not discover stores or use login-required APIs.",
+  "type": "object",
+  "schemaVersion": 1,
+  "properties": {
+    "storeUrls": {"title":"Store home URLs","type":"array","description":"Public HTTP(S) Shopify storefront home URLs. Catalog pagination is attempted using the observed /products.json convention.","editor":"stringList","maxItems":100,"items":{"type":"string","pattern":"^https?://"}},
+    "productUrls": {"title":"Individual product URLs","type":"array","description":"Public HTTP(S) product URLs such as https://store.example/products/handle. These are fetched with Shopify's documented Ajax product endpoint.","editor":"stringList","maxItems":500,"items":{"type":"string","pattern":"^https?://"}},
+    "maxProducts": {"title":"Maximum products","type":"integer","description":"Global cap across all stores and product URLs. Reaching this cap is successful but truncated.","editor":"number","default":100,"minimum":1,"maximum":5000},
+    "requestTimeoutSecs": {"title":"Request timeout (seconds)","type":"integer","description":"Per-request timeout.","editor":"number","default":30,"minimum":5,"maximum":60},
+    "retries": {"title":"Retries","type":"integer","description":"Retries for transient request failures. Deterministic 400/401/403/404 responses are not retried unchanged.","editor":"number","default":2,"minimum":0,"maximum":3},
+    "maxConcurrencyPerDomain": {"title":"Per-domain concurrency","type":"integer","description":"Bound on simultaneous requests to one domain.","editor":"number","default":2,"minimum":1,"maximum":4}
+  },
+  "additionalProperties": false
+}
