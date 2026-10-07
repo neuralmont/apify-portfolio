@@ -18,8 +18,10 @@
   "local_sdk_ppe": {"sdk": "apify 4.0.2", "python": "3.11.14", "sufficient": {"requested": 3, "budget_usd": 10, "dataset_rows": 3, "product_record_events": 3, "synthetic_dataset_item_events": 3, "exit_status": 0}, "partial": {"requested": 3, "budget_usd": 4, "dataset_rows": 2, "product_record_events": 2, "synthetic_dataset_item_events": 2, "exit_status": 0}, "exact": {"requested": 2, "budget_usd": 4, "dataset_rows": 2, "product_record_events": 2, "synthetic_dataset_item_events": 2, "exit_status": 0}, "pricing_note": "Local SDK PPE test events default to simulated $1. These checks do not verify the proposed $0.003 Console price."}
   ,"private_cloud_smoke": {
     "actor_id": "6p2A8KHhUDOXewSXQ",
-    "build_id": "CBzRj7a0143tHlgZK",
-    "build_number": "0.1.3",
+    "smoke_build_id": "CBzRj7a0143tHlgZK",
+    "smoke_build_number": "0.1.3",
+    "final_build_id": "450Vthn9TlQ3X9xCl",
+    "final_build_number": "0.1.4",
     "store_run": {"run_id": "cJ0vBiFpCda5DyvWf", "status": "SUCCEEDED", "dataset_rows": 3, "run_time_seconds": 4.451, "memory_max_bytes": 63893504, "usage_total_usd": 0.001043984722144074},
     "product_run": {"run_id": "pbo21ylSTwHCSUKeJ", "status": "SUCCEEDED", "dataset_rows": 1, "run_time_seconds": 4.07, "memory_max_bytes": 81461248, "usage_total_usd": 0.0009557784709003238},
     "pricing_note": "Actor remained unmonetized; these are owner/test platform usage charges only. No customer charging was enabled."
