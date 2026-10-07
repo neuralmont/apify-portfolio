@@ -3,7 +3,7 @@ from urllib.parse import parse_qs, urlparse
 
 import pytest
 
-from shopify_actor.core import ExtractionError, HttpClient, InputError, PinnedHTTPConnection, SafeRedirectHandler, _product_job, extract, normalize_product, validate_input
+from shopify_actor.core import ExtractionError, HttpClient, InputError, PinnedHTTPConnection, PinnedHTTPSHandler, SafeRedirectHandler, _product_job, extract, normalize_product, validate_input
 
 
 def product(pid, handle="one", **extra):
@@ -200,6 +200,23 @@ def test_pinned_transport_connects_to_validated_address(monkeypatch):
     with pytest.raises(OSError):
         PinnedHTTPConnection("shop.example", address="93.184.216.34").connect()
     assert targets == [("93.184.216.34", 80)]
+
+
+def test_pinned_https_handler_defaults_to_hostname_verification(monkeypatch):
+    handler = PinnedHTTPSHandler()
+    captured = {}
+
+    def fake_do_open(connection_class, request, **kwargs):
+        captured.update(kwargs)
+        return object()
+
+    monkeypatch.setattr(handler, "do_open", fake_do_open)
+    monkeypatch.setattr("shopify_actor.core._validated_address", lambda url: "93.184.216.34")
+    from urllib.request import Request
+    handler.https_open(Request("https://shop.example/"))
+    assert captured["address"] == "93.184.216.34"
+    assert captured["check_hostname"] is captured["context"].check_hostname
+    assert captured["check_hostname"] is True
 
 
 def test_redirect_dns_is_rejected_before_following(monkeypatch):

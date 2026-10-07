@@ -7,6 +7,7 @@ import ipaddress
 import json
 import re
 import socket
+import ssl
 import threading
 import time
 from collections import defaultdict
@@ -163,7 +164,17 @@ class PinnedHTTPHandler(HTTPHandler):
 
 class PinnedHTTPSHandler(HTTPSHandler):
     def https_open(self, req: Request) -> Any:
-        return self.do_open(PinnedHTTPSConnection, req, context=self._context, check_hostname=self._check_hostname, address=_validated_address(req.full_url))
+        context = self._context or ssl.create_default_context()
+        check_hostname = getattr(self, "_check_hostname", None)
+        if check_hostname is None:
+            check_hostname = context.check_hostname
+        return self.do_open(
+            PinnedHTTPSConnection,
+            req,
+            context=context,
+            check_hostname=check_hostname,
+            address=_validated_address(req.full_url),
+        )
 
 
 class DomainLimiter:
