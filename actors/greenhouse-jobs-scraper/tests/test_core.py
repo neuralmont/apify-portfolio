@@ -81,6 +81,31 @@ def test_failed_board_preserves_other_records_and_marks_incomplete():
     assert result["summary"]["errors"] == ["invalid board"]
 
 
+def test_malformed_later_board_preserves_first_board_records():
+    client = FakeClient({"acme": {"jobs": [job(1)]}, "bad": {"jobs": [None]}})
+    result = extract(data(boards=["acme", "bad"]), client)
+    assert [row["job_id"] for row in result["records"]] == ["1"]
+    assert result["summary"]["boards_failed"] == 1
+    assert result["summary"]["requested_result_completion"] == "incomplete"
+    assert "non-object job" in result["summary"]["errors"][0]
+
+
+def test_malformed_location_is_a_board_failure():
+    malformed = job(1)
+    malformed["location"] = ["not", "an", "object"]
+    result = extract(data(), FakeClient({"acme": {"jobs": [malformed]}}))
+    assert result["records"] == []
+    assert result["summary"]["boards_failed"] == 1
+    assert "location" in result["summary"]["errors"][0]
+
+
+def test_exact_single_board_cap_is_requested_complete_but_not_full_matching_coverage():
+    result = extract(data(maxJobs=2), FakeClient({"acme": {"jobs": [job(1), job(2)]}}))
+    assert result["summary"]["requested_result_completion"] == "complete"
+    assert result["summary"]["full_input_coverage"] is True
+    assert result["summary"]["all_matching_jobs_delivered"] is True
+
+
 def test_summary_has_no_job_payloads():
     result = extract(data(), FakeClient({"acme": {"jobs": [job(1)]}}))
     assert "records" not in result["summary"]

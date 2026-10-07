@@ -123,13 +123,23 @@ def _names(items: Any) -> list[str]:
 
 
 def _matches(job: dict[str, Any], data: dict[str, Any]) -> bool:
+    location_value = job.get("location")
+    if location_value is not None and not isinstance(location_value, dict):
+        raise ExtractionError("job location must be an object or null")
+    if isinstance(location_value, dict) and location_value.get("name") is not None and not isinstance(location_value.get("name"), str):
+        raise ExtractionError("job location.name must be a string or null")
     title = str(job.get("title") or "").casefold()
-    location = str((job.get("location") or {}).get("name") or "").casefold()
+    location = str((location_value or {}).get("name") or "").casefold()
     departments = " ".join(_names(job.get("departments"))).casefold()
     return all(not group or any(keyword in haystack for keyword in group) for group, haystack in ((data["titleKeywords"], title), (data["locationKeywords"], location), (data["departmentKeywords"], departments)))
 
 
 def normalize_job(board_token: str, job: dict[str, Any], retrieved_at: str) -> dict[str, Any]:
+    if not isinstance(job, dict):
+        raise ExtractionError(f"board {board_token} returned a non-object job")
+    location = job.get("location")
+    if location is not None and not isinstance(location, dict):
+        raise ExtractionError(f"board {board_token} returned a job with malformed location")
     job_id = job.get("id")
     if job_id is None:
         raise ExtractionError(f"board {board_token} returned a job without id")
@@ -140,7 +150,7 @@ def normalize_job(board_token: str, job: dict[str, Any], retrieved_at: str) -> d
         "job_id": str(job_id),
         "internal_job_id": str(job["internal_job_id"]) if job.get("internal_job_id") is not None else None,
         "title": job.get("title"),
-        "location": (job.get("location") or {}).get("name"),
+        "location": (location or {}).get("name"),
         "departments": job.get("departments") if isinstance(job.get("departments"), list) else [],
         "offices": job.get("offices") if isinstance(job.get("offices"), list) else [],
         "description_html": content if content is not None else None,
@@ -201,81 +211,128 @@ class GreenhouseClient:
         raise ExtractionError(f"Greenhouse board {token} request failed: {last_error}")
 
 
+def _new_outcome(token: str) -> dict[str, Any]:
+    return {
+        "board_token": token,
+        "status": "success",
+        "jobs_fetched": 0,
+        "jobs_matched": 0,
+        "jobs_selected": 0,
+        "jobs_delivered": 0,
+        "jobs_charged": 0,
+        "duplicates": 0,
+        "errors": [],
+        "coverage": "full_board_response",
+    }
+
+
+def extract_board(
+    data: dict[str, Any],
+    token: str,
+    client: GreenhouseClient,
+    allowance: int,
+    identities: Optional[set[tuple[str, str]]] = None,
+    retrieved_at: Optional[str] = None,
+) -> dict[str, Any]:
+    """Fetch and select one board, returning only records within the allowance."""
+    identities = identities if identities is not None else set()
+    retrieved_at = retrieved_at or datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+    outcome = _new_outcome(token)
+    selected: list[dict[str, Any]] = []
+    try:
+        payload = client.get_board(token)
+        if not isinstance(payload, dict) or not isinstance(payload.get("jobs"), list):
+            raise ExtractionError(f"board {token} returned malformed JSON response")
+        jobs = payload["jobs"]
+        outcome["jobs_fetched"] = len(jobs)
+        seen_board: set[str] = set()
+        for item in jobs:
+            if not isinstance(item, dict):
+                raise ExtractionError(f"board {token} returned a non-object job")
+            job_id = item.get("id")
+            if job_id is None:
+                raise ExtractionError(f"board {token} returned a job without id")
+            identity = str(job_id)
+            if identity in seen_board:
+                outcome["duplicates"] += 1
+                continue
+            seen_board.add(identity)
+            if not _matches(item, data):
+                continue
+            outcome["jobs_matched"] += 1
+            if len(selected) >= allowance:
+                outcome["coverage"] = "truncated_at_global_cap"
+                continue
+            record = normalize_job(token, item, retrieved_at)
+            scoped_identity = (token, record["job_id"])
+            if scoped_identity in identities:
+                outcome["duplicates"] += 1
+                continue
+            identities.add(scoped_identity)
+            selected.append(record)
+            outcome["jobs_selected"] += 1
+        if outcome["jobs_matched"] > outcome["jobs_selected"]:
+            outcome["coverage"] = "truncated_at_global_cap"
+    except ExtractionError as exc:
+        outcome["status"] = "failed"
+        outcome["errors"].append(str(exc))
+    return {"records": selected, "outcome": outcome}
+
+
 def extract(data: dict[str, Any], client: Optional[GreenhouseClient] = None) -> dict[str, Any]:
+    """Compatibility aggregate used by tests and local callers.
+
+    The Actor runtime uses extract_board incrementally so delivery happens
+    between board requests. This helper aggregates the same board results.
+    """
     data = validate_input(data)
     client = client or GreenhouseClient(data["requestTimeoutSecs"], data["retries"])
     started = time.monotonic()
     retrieved_at = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
     records: list[dict[str, Any]] = []
     identities: set[tuple[str, str]] = set()
-    outcomes = []
-    errors = []
-    skipped = []
-    processed = 0
+    outcomes: list[dict[str, Any]] = []
+    errors: list[str] = []
+    skipped: list[str] = []
     cap_stop = False
-    for token in data["boards"]:
+    for index, token in enumerate(data["boards"]):
         if len(records) >= data["maxJobs"]:
             cap_stop = True
-            skipped.extend(data["boards"][processed:])
+            skipped.extend(data["boards"][index:])
             break
-        processed += 1
-        outcome = {"board_token": token, "status": "success", "jobs_fetched": 0, "jobs_matched": 0, "jobs_delivered": 0, "duplicates": 0, "errors": [], "coverage": "full_board_response"}
-        try:
-            payload = client.get_board(token)
-            jobs = payload["jobs"]
-            outcome["jobs_fetched"] = len(jobs)
-            seen_board: set[str] = set()
-            normalized = []
-            for job in sorted(jobs, key=lambda item: str(item.get("id", ""))):
-                if not isinstance(job, dict):
-                    raise ExtractionError(f"board {token} returned a non-object job")
-                job_id = job.get("id")
-                if job_id is None:
-                    raise ExtractionError(f"board {token} returned a job without id")
-                identity = str(job_id)
-                if identity in seen_board:
-                    outcome["duplicates"] += 1
-                    continue
-                seen_board.add(identity)
-                if _matches(job, data):
-                    outcome["jobs_matched"] += 1
-                    normalized.append(normalize_job(token, job, retrieved_at))
-            allowance = data["maxJobs"] - len(records)
-            if len(normalized) > allowance:
-                outcome["coverage"] = "truncated_at_global_cap"
-                cap_stop = True
-            for record in normalized[:allowance]:
-                identity = (token, record["job_id"])
-                if identity in identities:
-                    outcome["duplicates"] += 1
-                    continue
-                identities.add(identity)
-                records.append(record)
-                outcome["jobs_delivered"] += 1
-        except ExtractionError as exc:
-            outcome["status"] = "failed"
-            outcome["errors"].append(str(exc))
-            errors.append(str(exc))
+        result = extract_board(data, token, client, data["maxJobs"] - len(records), identities, retrieved_at)
+        outcome = result["outcome"]
+        records.extend(result["records"])
+        if outcome["errors"]:
+            errors.extend(outcome["errors"])
+        if outcome["coverage"] == "truncated_at_global_cap":
+            cap_stop = True
         outcomes.append(outcome)
         if cap_stop:
-            skipped.extend(data["boards"][processed:])
+            skipped.extend(data["boards"][index + 1:])
             break
+    for outcome in outcomes:
+        outcome["jobs_delivered"] = outcome["jobs_selected"]
+        outcome["jobs_charged"] = 0
+    all_matching_delivered = not errors and not skipped and not cap_stop
     elapsed = round(time.monotonic() - started, 3)
     summary = {
         "boards_requested": len(data["boards"]),
-        "boards_processed": processed,
+        "boards_processed": len(outcomes),
         "boards_skipped": len(skipped),
         "boards_failed": sum(outcome["status"] == "failed" for outcome in outcomes),
         "records_fetched": sum(outcome["jobs_fetched"] for outcome in outcomes),
         "records_matched": sum(outcome["jobs_matched"] for outcome in outcomes),
+        "records_selected": sum(outcome["jobs_selected"] for outcome in outcomes),
         "records_delivered": len(records),
         "duplicates": sum(outcome["duplicates"] for outcome in outcomes),
         "cap_truncated": cap_stop,
         "budget_stop": False,
         "skipped_boards": skipped,
-        "requested_result_completion": "complete" if not errors and (len(records) < data["maxJobs"] or cap_stop) else "incomplete",
+        "requested_result_completion": "complete" if not errors and (len(records) >= data["maxJobs"] or all_matching_delivered) else "incomplete",
         "full_input_coverage": not skipped and not errors,
-        "coverage": "bounded_global_cap" if cap_stop else "all_requested_boards",
+        "all_matching_jobs_delivered": all_matching_delivered,
+        "coverage": "bounded_global_cap" if cap_stop else ("partial_with_errors" if errors else "all_requested_boards"),
         "board_outcomes": outcomes,
         "errors": errors,
         "resource": {"requests": client.stats.requests, "retries": client.stats.retries, "bytes_received": client.stats.bytes_received, "elapsed_seconds": elapsed},
