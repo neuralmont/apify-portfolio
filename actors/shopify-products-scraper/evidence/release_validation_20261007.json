@@ -1,0 +1,98 @@
+{
+  "repository_commit_before_listing_change": "66b971b",
+  "listing_commit": "7e5f106",
+  "actor_id": "6p2A8KHhUDOXewSXQ",
+  "publication": {
+    "is_public": true,
+    "public_url": "https://apify.com/purple_beep_boop/shopify-products-scraper",
+    "published_at_utc": "2026-10-07T17:26:05.017Z",
+    "title": "Shopify Products Scraper",
+    "category": "ECOMMERCE",
+    "selected_build": "VSEaZGI7v0f19TR8q",
+    "selected_build_number": "0.1.10"
+  },
+  "pricing_readback": {
+    "pricing_model": "PAY_PER_EVENT",
+    "product-record": {
+      "price_usd": 0.0015,
+      "primary": true,
+      "one_time": false,
+      "includes": "one delivered product record and nested variants"
+    },
+    "platform_usage_pass_through": false,
+    "synthetic_events": [],
+    "diagnostic_or_summary_events": [],
+    "minimum_max_total_charge_usd": null,
+    "verification_note": "Authenticated Actor API readback contains only the custom product-record event; public Store page displays $1.50 / 1,000 product records. The browser Console session was not authenticated, so no private Console screenshot was captured."
+  },
+  "tests": {
+    "command": "cd actors/shopify-products-scraper && /private/tmp/shopify-actor-venv/bin/python -m pytest -q tests",
+    "result": "24 passed in 0.55s"
+  },
+  "private_platform_checks": [
+    {
+      "case": "sufficient budget",
+      "run_id": "Xbxw1d4gVw7L4VxMu",
+      "build_id": "cO7dN55vDwS4k0k7Z",
+      "requested": 3,
+      "max_total_charge_usd": 0.0045,
+      "status": "SUCCEEDED",
+      "exit_code": 0,
+      "dataset_rows": 3,
+      "unique_product_ids": 3,
+      "charged_product_records": 3,
+      "summary_redacted": true,
+      "summary_errors": [],
+      "requested_result_completion": "complete",
+      "billing_limit_reached": true,
+      "platform_usage_usd": 0.0010587413545714484
+    },
+    {
+      "case": "budget for two of three",
+      "run_id": "cmcp5JmmuQ3tFyVKo",
+      "build_id": "cO7dN55vDwS4k0k7Z",
+      "requested": 3,
+      "max_total_charge_usd": 0.003,
+      "status": "SUCCEEDED",
+      "exit_code": 0,
+      "dataset_rows": 2,
+      "unique_product_ids": 2,
+      "charged_product_records": 2,
+      "summary_redacted": true,
+      "summary_errors": ["customer spending limit reached; delivery stopped"],
+      "requested_result_completion": "incomplete",
+      "billing_limit_reached": true,
+      "platform_usage_usd": 0.0009638672931061851
+    },
+    {
+      "case": "exact budget for two",
+      "run_id": "Yr1KYVAmN3oF5mIMI",
+      "build_id": "cO7dN55vDwS4k0k7Z",
+      "requested": 2,
+      "max_total_charge_usd": 0.003,
+      "status": "SUCCEEDED",
+      "exit_code": 0,
+      "dataset_rows": 2,
+      "unique_product_ids": 2,
+      "charged_product_records": 2,
+      "summary_redacted": true,
+      "summary_errors": [],
+      "requested_result_completion": "complete",
+      "billing_limit_reached": true,
+      "platform_usage_usd": 0.0009556037201616499
+    }
+  ],
+  "listing_checks": {
+    "public_store_http_status": 200,
+    "displayed_price": "$1.50 / 1,000 product records",
+    "readme_contains_global_cap_and_limitations": true,
+    "readme_contains_nested_variants": true,
+    "readme_does_not_claim_inventory_quantity": true,
+    "shopify_documentation_links_http_status": {
+      "ajax_overview": 200,
+      "ajax_product_reference": 200,
+      "storefront_products_query": 200
+    }
+  },
+  "accounting_note": "These were owner/test runs. Platform usage values are measured test-account costs; they are not customer billing or demand metrics."
+}

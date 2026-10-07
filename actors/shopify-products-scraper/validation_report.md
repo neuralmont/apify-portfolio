@@ -1,6 +1,6 @@
 # Shopify Products Scraper validation report
 
-Observation date: 2026-10-07. This is a bounded source and packaging check, not a demand, freshness, or longitudinal-reliability study. No monetization, public deployment, schedule, or customer run is enabled by this repository change.
+Observation date: 2026-10-07. This is a bounded source and packaging check, not a demand, freshness, or longitudinal-reliability study. The Actor was published as a paid beta on 2026-10-07; no schedule was created and the recorded runs are owner/test runs.
 
 ## Source decision
 
@@ -65,7 +65,7 @@ Docker verification is blocked locally because `docker` is not installed; Apify'
 
 ## Suggested beta price and competitor context
 
-Suggested initial review price: `$0.003` per delivered product record (`$3/1,000`), including nested variants and no separate diagnostic or summary charge. This is configurable but intentionally not enabled.
+The paid-beta price is `$0.0015` per delivered product record (`$1.50/1,000`), including nested variants and no separate diagnostic or summary charge. Platform usage pass-through is off. The saved pricing contains no synthetic dataset-item or Actor-start events.
 
 Public competitor pages checked on 2026-10-07 show materially different scopes and prices: [Hydrafetch](https://apify.com/hydrafetch/shopify-store-products-scraper) advertises from $1.80/1,000 results, [Monty Burrows](https://apify.com/montyburrows/shopify-products) advertises from $0.21/1,000 variants, and [Tenfold Fleet](https://apify.com/tenfoldfleet/shopify-products-scraper) advertises from $0.80/1,000 products. These are not directly comparable units. The proposed price is a review hypothesis for one product record with nested variants, descriptions, images, timestamps, and direct-product support; it is not a claim of demand or profitability.
 
@@ -76,6 +76,18 @@ Public competitor pages checked on 2026-10-07 show materially different scopes a
 - Currency is reported only when `/cart.js` exposes it; USD is never assumed.
 - `available` is a boolean source signal, not inventory quantity.
 - Apify's build output does not expose a Git SHA automatically for direct CLI deployment; this report records the source SHA supplied to the final build.
+
+## Paid-beta release verification
+
+The customer-facing listing change was committed as `7e5f106` and built privately as `0.1.10`, build `VSEaZGI7v0f19TR8q`, from the reviewed Actor source. The complete suite passed **24 tests**. The Actor was then published at [apify.com/purple_beep_boop/shopify-products-scraper](https://apify.com/purple_beep_boop/shopify-products-scraper) on 2026-10-07. The public page displayed `$1.50 / 1,000 product records`, the updated README, the working example input, the global 5,000 cap, nested variants, and unsupported-store limitations. The public API confirmed `latest` selects build `0.1.10`.
+
+| Private check | Run | Status | Dataset / unique IDs | Charged `product-record` events | Completion |
+| --- | --- | --- | ---: | ---: | --- |
+| 3 products, budget `$0.0045` | `Xbxw1d4gVw7L4VxMu` | SUCCEEDED, exit 0 | 3 / 3 | 3 | complete |
+| 3 products, budget `$0.003` | `cmcp5JmmuQ3tFyVKo` | SUCCEEDED, exit 0 | 2 / 2 | 2 | incomplete; spending-limit diagnostic preserved |
+| 2 products, budget `$0.003` | `Yr1KYVAmN3oF5mIMI` | SUCCEEDED, exit 0 | 2 / 2 | 2 | complete; exact-budget delivery |
+
+All three summaries were count/status/diagnostic-only outputs with no product payload arrays. No duplicate, diagnostic, summary, synthetic dataset-item, or Actor-start charges were recorded. Measured platform usage was `$0.0010587413545714484`, `$0.0009638672931061851`, and `$0.0009556037201616499`, respectively; these are owner/test accounting, not customer billing. Full sanitized evidence is in [evidence/release_validation_20261007.json](evidence/release_validation_20261007.json).
 
 ## Final pagination and transport pass from commit `601fa21`
 
