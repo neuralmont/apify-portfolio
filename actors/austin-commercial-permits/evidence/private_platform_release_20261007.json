@@ -1,0 +1,13 @@
+{
+  "actor_id": "g32YlfG1SeYV9ctKK",
+  "is_public": false,
+  "source_sha_pushed": "82e09acc09bbfe38e4d177b6713db4a4b741b9d1",
+  "build": {"build_id":"aHA3Ib9CQYkNM4pcu","build_number":"0.2.1","status":"SUCCEEDED","finished_at":"2026-10-07T13:13:34.733Z","duration_seconds":12.101,"compute_units":0.013445555555555556},
+  "pricing_readback": {"pricing_model":"PAY_PER_EVENT","permit_record_event_price_usd":0.003,"permit_record_primary":true,"configured_event_names":["permit-record"],"synthetic_default_dataset_item_present":false,"synthetic_actor_start_present":false,"contractor_summary_event_present":false,"platform_usage_pass_through":"off by saved PPE event configuration; public Actor API has no separate boolean readback","minimal_max_total_charge_usd":null,"pricing_started_at":"2026-10-07T13:16:29.447Z","apify_margin_percentage":0.2},
+  "checks": [
+    {"label":"sufficient budget, request 3","run_id":"hCwm7C3r2Bs3sBV4X","dataset_id":"mndprzogbpzZtLjYJ","default_store_id":"mmNadLgwmolRFbDiO","budget_usd":0.012,"status":"SUCCEEDED","dataset_rows":3,"summary_records_delivered":3,"summary_charged_records":3,"summary_completion":"complete","billing_limit_reached":false,"contractor_summary_rows":3,"usage_total_usd":0.0013323345528708564,"elapsed_seconds":1.855,"source_requests":3,"retries":0},
+    {"label":"budget for 2, request 3","run_id":"WCa6XMJKlEUqsPBeo","dataset_id":"UFajMhL56p5GHeq3X","default_store_id":"tq3pk8UJTrWeLx3Br","budget_usd":0.006,"status":"SUCCEEDED","dataset_rows":2,"summary_records_delivered":2,"summary_charged_records":2,"summary_completion":"incomplete","billing_limit_reached":true,"contractor_summary_rows":2,"usage_total_usd":0.001142390466849009,"elapsed_seconds":1.141,"source_requests":3,"retries":0},
+    {"label":"exact budget, request 2","run_id":"LuFJzVJ4VIi6yvg9D","dataset_id":"xv3KAG14cBc45jDo9","default_store_id":"5u1rN81TmRG5UhzBw","budget_usd":0.006,"status":"SUCCEEDED","dataset_rows":2,"summary_records_delivered":2,"summary_charged_records":2,"summary_completion":"complete","billing_limit_reached":true,"contractor_summary_rows":2,"usage_total_usd":0.0012026043504476545,"elapsed_seconds":1.247,"source_requests":3,"retries":0}
+  ],
+  "accounting_notes": ["These are owner/test runs, not customer billing.","The charge endpoint is an Actor-internal POST endpoint; there is no post-run charge-event listing endpoint for owner readback.","Run usage_total_usd is platform usage, reported separately from permit-record event charges."]
+}

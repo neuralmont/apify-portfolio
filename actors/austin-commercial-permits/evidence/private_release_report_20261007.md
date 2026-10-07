@@ -2,38 +2,44 @@
 
 ## Reviewed source
 
-- Requested source SHA: `3f1d9713bb9a7eecdc61c10e88100eb05426205a`
-- Local repository matched that SHA before release edits.
-- No public publication or schedule was created.
+- Requested source SHA: `82e09acc09bbfe38e4d177b6713db4a4b741b9d1`.
+- This exact reviewed source was pushed to the existing Actor `g32YlfG1SeYV9ctKK`.
+- The Actor remains private; no publication or schedule was created.
 
-## Deployment and platform configuration
+## Deployment and pricing readback
 
-Deployment/build and pricing readback were not completed because this environment has no authenticated Apify Console session, no `APIFY_TOKEN`, and no Apify CLI credentials. The browser reaches the Apify sign-in page. No credentials were entered or recorded, and no platform configuration was guessed.
+The private deployment succeeded:
 
-Whether Apify requires publication before activating these pricing settings could not be assessed without that authenticated Console readback.
+- Build `0.2.1`, ID `aHA3Ib9CQYkNM4pcu`, status `SUCCEEDED`.
+- Finished `2026-10-07T13:13:34.733Z`; build duration 12.101 seconds.
+- Apify did not expose a Git SHA in build readback; the source SHA above is the exact local commit supplied to `apify actors push`.
 
-The configuration to apply and read back is:
+The saved pricing configuration is PPE with one event:
 
 | Setting | Required value | Readback |
 | --- | --- | --- |
-| Custom event `permit-record` | `$0.003` per delivered permit | unavailable without authentication |
-| Pay per event + usage | OFF | unavailable without authentication |
-| `apify-default-dataset-item` | removed or `$0` | unavailable without authentication |
-| `apify-actor-start` | disabled | unavailable without authentication |
-| Contractor summary event | none | implemented as included KVS output |
+| `permit-record` | `$0.003` per delivered permit | Saved; primary event |
+| Pay per event + usage | OFF | Saved PPE event configuration; the public Actor API has no separate readback boolean |
+| `apify-default-dataset-item` | Removed or `$0` | Absent from configured events |
+| `apify-actor-start` | Disabled | Absent from configured events |
+| Contractor summary event | None | Absent; summary is included KVS output |
 
-## Small billing checks
+Apify did not require publication to save this private configuration. Sanitized evidence is in `evidence/private_platform_release_20261007.json`; credentials and raw API responses are excluded.
 
-The three checks were exercised against the real Apify Python SDK locally with fixture extraction data, local storage, and `ACTOR_TEST_PAY_PER_EVENT=true`. They are owner/test accounting only. Local PPE events use simulated `$1` pricing and do not verify the proposed Console price. Because the local test configuration still emits the synthetic default-dataset event, the local total-charge budgets were 10 for the sufficient case and 4 for the two-record budget cases; the custom `permit-record` counts are the relevant result billing counts.
+## Small private platform billing checks
 
-| Check | Dataset rows | `permit-record` events | Final status | Summary |
-| --- | ---: | ---: | --- | --- |
-| Sufficient budget, request 3 | 3 | 3 | Exit 0; complete | Contractor summary count 3; no limit reached |
-| Budget for 2, request 3 | 2 | 2 | Exit 0; incomplete | Spending-limit-only stop; contractor summary count 2; default synthetic events 2 |
-| Exact budget for 2, request 2 | 2 | 2 | Exit 0; complete | Exact-budget final delivery; contractor summary count 2; default synthetic events 2 |
+These checks ran remotely against the private deployed Actor and are distinct from the earlier local SDK tests. They used the 2026-01-01 through 2026-10-06 Commercial window and bounded result caps. They are owner/test accounting only, not customer billing. Apify reports platform usage separately from event charges.
 
-The exact real-SDK evidence is `evidence/billing_sdk_integration_20261006.json`; no customer billing is represented. The 2026-10-07 command outputs used the committed `scripts/verify_billing_sdk.py` and SDK versions recorded in that evidence.
+| Check | Run ID | Dataset rows | `permit-record` events | Final status | Summary |
+| --- | --- | ---: | ---: | --- | --- |
+| Sufficient budget, request 3 | `hCwm7C3r2Bs3sBV4X` | 3 | 3 | Exit 0; complete | Contractor summary count 3; no limit reached; usage `$0.0013323346` |
+| Budget for 2, request 3 | `WCa6XMJKlEUqsPBeo` | 2 | 2 | Exit 0; incomplete | Spending-limit-only stop; contractor summary count 2; usage `$0.0011423905` |
+| Exact budget for 2, request 2 | `LuFJzVJ4VIi6yvg9D` | 2 | 2 | Exit 0; complete | Exact-budget final delivery; contractor summary count 2; usage `$0.0012026044` |
 
-## Release constraint
+Each run used a distinct default key-value store, and its `CONTRACTOR_SUMMARY` row count matched that run's delivered rows. The documented Apify charge endpoint is an Actor-internal POST operation, not a post-run listing endpoint; consequently, the available reconciliation is `RUN_SUMMARY.charged_records` plus the saved pricing event set. No synthetic event or contractor-summary charge was present in readback.
 
-An authenticated Apify owner must deploy the reviewed source, record the resulting private build ID/source SHA, apply the pricing settings above, and read back the saved configuration. If Apify requires publication before activating pricing, keep the Actor private and record that constraint instead of publishing.
+The exact real-SDK local evidence remains `evidence/billing_sdk_integration_20261006.json`; it was not rerun here. Local test events use simulated `$1` pricing and do not verify the proposed Console price.
+
+## Remaining platform requirement
+
+No publication is required for this saved private configuration. Before any customer launch, complete the separate release review and any Console payout/KYC requirements. This pass did not publish, enable schedules, or run customer billing.
