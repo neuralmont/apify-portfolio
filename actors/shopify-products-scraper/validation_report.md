@@ -43,6 +43,20 @@ The isolated environment uses Python 3.11.14 and `apify==4.0.2`. The local PPE s
 
 The local SDK also emitted two/three synthetic `apify-default-dataset-item` events because local test mode defaults to simulated $1 events. Those are test-account artifacts, not product charges, and do not verify a future Console price of $0.003.
 
+## Correction pass from commit `81ad95e`
+
+The focused regression suite now reports **20 passed**. `RUN_SUMMARY` store/product outcomes are count/status/coverage/diagnostic objects only; a partial spending-limit test confirms no `records` arrays survive summary persistence. Collection is deterministic and sequential: the shared global cap is applied before opening later inputs, skipped inputs are listed, final-page allowance is used in the request, and repeated or duplicate-only pages fail with preserved partial output.
+
+Final private build: `CzeJQMFtFqxcuqGug` (`0.1.6`) for Actor `6p2A8KHhUDOXewSXQ`, from source commit `81ad95e`.
+
+| Check | Run | Status | Delivered/dataset rows | Diagnostics | Runtime / usage |
+| --- | --- | --- | ---: | --- | --- |
+| Individual product | `qxHMUxq8hIYk48KyS` | SUCCEEDED | 1 / 1 | none | 3.441 s / $0.0008180468088189762 |
+| Three-store shared cap (`maxProducts=3`) | `d8gCcwf8Qnjp57yvp` | SUCCEEDED | 3 / 3 | ColourPop and Allbirds skipped after cap | 4.381 s / $0.001028090537700388 |
+| UNTUCKit multi-page (`maxProducts=300`) | `Svr22N2SxAvQwl0Eb` | FAILED, partial preserved | 250 / 250; 300 source rows counted | duplicate-only page detected; no product payload in summary | 18.633 s / $0.005124556330705681 |
+
+The multi-page failure is an honest limitation of the observed catalog endpoint: page 2 returned only duplicate IDs. The actor no longer claims complete coverage for that response. The source produced 250 usable records and the default dataset retained them while `RUN_SUMMARY` retained only diagnostics and counts. The three runs were owner/test runs with monetization disabled; usage totals are platform test costs, not customer charges. Sanitized IDs and results are in [evidence/correction_validation_20261007.json](evidence/correction_validation_20261007.json).
+
 ## Private Apify smoke verification
 
 The new Actor was created privately as `6p2A8KHhUDOXewSXQ`. Final build `450Vthn9TlQ3X9xCl` (`0.1.4`) succeeded from the committed source tree after the Apify schema validator checks. Smoke runs used the preceding equivalent build `CBzRj7a0143tHlgZK` (`0.1.3`): store input run `cJ0vBiFpCda5DyvWf` succeeded with 3 dataset rows, 4.451 seconds, 63,893,504-byte maximum memory, and $0.001043984722144074 actual platform usage; individual-product run `pbo21ylSTwHCSUKeJ` succeeded with 1 dataset row, 4.070 seconds, 81,461,248-byte maximum memory, and $0.0009557784709003238 actual platform usage. Storage-ID reads confirmed dataset records and `RUN_SUMMARY` outputs. These are owner/test runs, not customer billing, and signed output URLs are intentionally not committed.
@@ -61,4 +75,4 @@ Public competitor pages checked on 2026-10-07 show materially different scopes a
 - Some stores may block the endpoint or require a custom storefront/API token; those cases remain unsupported in v1.
 - Currency is reported only when `/cart.js` exposes it; USD is never assumed.
 - `available` is a boolean source signal, not inventory quantity.
-- The committed source SHA should be associated with the successful build after the final Git commit; Apify's build output does not expose a Git SHA automatically for this direct CLI deployment.
+- Apify's build output does not expose a Git SHA automatically for direct CLI deployment; this report records the source SHA supplied to the final build.
