@@ -14,7 +14,7 @@ This is a small paid-beta candidate, not a universal Shopify crawler. It does no
 
 ## Pricing proposal
 
-Suggested initial beta price: `$0.003` per delivered product record (`$3 per 1,000`). Variants are included in the product record. Diagnostics, duplicate records, and failed fetches are not charged. Platform usage should remain included while testing; monetization is intentionally not enabled by this repository change.
+Paid-beta price: `$0.0015` per delivered product record (`$1.50 per 1,000`). Nested variants are included in each product record. Diagnostics, duplicate records, and failed fetches are not charged. Platform usage is included in this price; no separate synthetic dataset-item, Actor-start, contractor-summary, or diagnostic charge applies.
 
 ## Example input
 
