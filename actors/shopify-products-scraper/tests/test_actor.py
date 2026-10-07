@@ -38,9 +38,10 @@ class FakeActor:
 
 
 def _result(errors=None, records=None):
+    delivered_records = records or [{"product_id": "1"}, {"product_id": "2"}, {"product_id": "3"}]
     return {
-        "records": records or [{"product_id": "1"}, {"product_id": "2"}, {"product_id": "3"}],
-        "summary": {"errors": errors or [], "pagination_complete": True, "cap_truncated": False},
+        "records": delivered_records,
+        "summary": {"errors": errors or [], "pagination_complete": True, "cap_truncated": False, "store_outcomes": [{"status": "partial", "records": delivered_records}]},
         "schema": {"fixture": True},
     }
 
@@ -59,6 +60,7 @@ def test_spending_limit_only_exits_successfully_after_partial_delivery(monkeypat
     assert len(actor.pushed) == 2
     assert actor.values["RUN_SUMMARY"]["records_delivered"] == 1
     assert actor.values["RUN_SUMMARY"]["requested_result_completion"] == "incomplete"
+    assert all("records" not in outcome for outcome in actor.values["RUN_SUMMARY"].get("store_outcomes", []))
 
 
 def test_spending_limit_does_not_hide_extraction_failure(monkeypatch):

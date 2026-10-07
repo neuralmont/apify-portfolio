@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import html
+import hashlib
 import ipaddress
 import json
 import re
@@ -15,7 +16,7 @@ from html.parser import HTMLParser
 from typing import Any, Optional
 from urllib.error import HTTPError, URLError
 from urllib.parse import urljoin, urlparse, urlunparse
-from urllib.request import Request, build_opener
+from urllib.request import HTTPRedirectHandler, Request, build_opener
 
 MAX_PRODUCTS = 5000
 CATALOG_PAGE_SIZE = 250
@@ -98,7 +99,7 @@ def validate_input(raw: Optional[dict[str, Any]]) -> dict[str, Any]:
     return data
 
 
-def _check_public_redirect(url: str) -> None:
+def _check_public_destination(url: str) -> None:
     parsed = urlparse(url)
     if parsed.scheme not in {"http", "https"} or not parsed.hostname:
         raise ExtractionError(f"redirected destination is not HTTP(S): {url}")
@@ -106,15 +107,24 @@ def _check_public_redirect(url: str) -> None:
     if host in {"localhost", "localhost.localdomain"} or host.endswith(".local"):
         raise ExtractionError(f"redirected destination is private/local: {url}")
     try:
-        if not ipaddress.ip_address(host).is_global:
-            raise ExtractionError(f"redirected destination is non-public: {url}")
+        ip = ipaddress.ip_address(host)
     except ValueError:
         try:
             addresses = socket.getaddrinfo(host, parsed.port or (443 if parsed.scheme == "https" else 80), type=socket.SOCK_STREAM)
-            if not addresses or any(not ipaddress.ip_address(item[4][0]).is_global for item in addresses):
-                raise ExtractionError(f"redirected destination does not resolve to public addresses: {url}")
         except socket.gaierror as exc:
-            raise ExtractionError(f"redirected destination DNS failed: {url}") from exc
+            raise ExtractionError(f"destination DNS failed: {url}") from exc
+        if not addresses or any(not ipaddress.ip_address(item[4][0]).is_global for item in addresses):
+            raise ExtractionError(f"destination does not resolve to public addresses: {url}")
+    else:
+        if not ip.is_global:
+            raise ExtractionError(f"destination is non-public: {url}")
+
+
+class SafeRedirectHandler(HTTPRedirectHandler):
+    def redirect_request(self, req: Request, fp: Any, code: int, msg: str, headers: Any, newurl: str) -> Optional[Request]:
+        resolved = urljoin(req.full_url, newurl)
+        _check_public_destination(resolved)
+        return super().redirect_request(req, fp, code, msg, headers, resolved)
 
 
 class DomainLimiter:
@@ -135,7 +145,7 @@ class HttpClient:
         self.timeout = timeout
         self.retries = retries
         self.limiter = DomainLimiter(concurrency)
-        self.opener = opener or build_opener()
+        self.opener = opener or build_opener(SafeRedirectHandler())
         self.lock = threading.Lock()
         self.requests = 0
         self.retries_used = 0
@@ -149,6 +159,7 @@ class HttpClient:
                 time.sleep(min(2 ** attempt, 8))
                 with self.lock:
                     self.retries_used += 1
+            _check_public_destination(url)
             parsed = urlparse(url)
             semaphore = self.limiter.acquire(parsed.hostname or "")
             try:
@@ -157,7 +168,7 @@ class HttpClient:
                 request = Request(url, headers={"User-Agent": "shopify-products-scraper-beta/0.1", "Accept": "application/json"})
                 with self.opener.open(request, timeout=self.timeout) as response:
                     final_url = response.geturl()
-                    _check_public_redirect(final_url)
+                    _check_public_destination(final_url)
                     body = response.read()
                     with self.lock:
                         self.bytes += len(body)
@@ -188,6 +199,10 @@ class HttpClient:
 def _origin(url: str) -> str:
     p = urlparse(url)
     return f"{p.scheme}://{p.netloc}"
+
+
+def _identity(store_url: str, product_id: Any) -> tuple[str, str]:
+    return ((urlparse(store_url).hostname or urlparse(store_url).netloc).lower(), str(product_id))
 
 
 def _handle_from_url(url: str) -> Optional[str]:
@@ -235,6 +250,12 @@ def normalize_product(product: dict[str, Any], store_url: str, endpoint: str, cu
 
     pid = product.get("id")
     handle = product.get("handle")
+    description = product.get("description") if ajax_money else product.get("body_html")
+    if description is None:
+        description = product.get("body_html")
+    product_type = product.get("type") if ajax_money else product.get("product_type")
+    if product_type is None:
+        product_type = product.get("product_type")
     variants = []
     for variant in product.get("variants") or []:
         options = variant.get("options")
@@ -253,7 +274,10 @@ def normalize_product(product: dict[str, Any], store_url: str, endpoint: str, cu
             "availability_known": isinstance(variant.get("available"), bool),
         })
     path = product.get("url") or (f"/products/{handle}" if handle else None)
-    canonical = urljoin(store_url.rstrip("/") + "/", str(path).lstrip("/")) if path else None
+    if "/products/" in urlparse(store_url).path and not product.get("url"):
+        canonical = urlunparse((urlparse(store_url).scheme, urlparse(store_url).netloc, urlparse(store_url).path, "", "", ""))
+    else:
+        canonical = urljoin(store_url.rstrip("/") + "/", str(path).lstrip("/")) if path else None
     return {
         "store_url": store_url,
         "product_id": str(pid) if pid is not None else None,
@@ -261,10 +285,10 @@ def normalize_product(product: dict[str, Any], store_url: str, endpoint: str, cu
         "canonical_product_url": canonical,
         "title": product.get("title"),
         "vendor": product.get("vendor"),
-        "product_type": product.get("product_type"),
+        "product_type": product_type,
         "tags": _tag_list(product.get("tags")),
-        "description_text": html_to_text(product.get("body_html")),
-        "description_html": product.get("body_html"),
+        "description_text": html_to_text(description),
+        "description_html": description,
         "images": _image_urls(product.get("images"), store_url),
         "source_created_at": product.get("created_at"),
         "source_published_at": product.get("published_at"),
@@ -278,32 +302,46 @@ def normalize_product(product: dict[str, Any], store_url: str, endpoint: str, cu
     }
 
 
-def _currency(client: HttpClient, origin: str) -> Optional[str]:
+def _currency(client: HttpClient, base_url: str) -> Optional[str]:
     try:
-        payload, _ = client.get_json(origin + "/cart.js")
+        parsed = urlparse(base_url)
+        path = parsed.path
+        if "/products/" in path:
+            path = path.split("/products/", 1)[0].rstrip("/") + "/cart.js"
+        else:
+            path = path.rstrip("/") + "/cart.js"
+        cart_url = urlunparse((parsed.scheme, parsed.netloc, path or "/cart.js", "", "", ""))
+        payload, resolved = client.get_json(cart_url)
+        if urlparse(resolved).hostname != urlparse(base_url).hostname:
+            return None
         value = payload.get("currency") if isinstance(payload, dict) else None
         return str(value) if value else None
     except ExtractionError:
         return None
 
 
-def _store_job(store_input: str, data: dict[str, Any], client: HttpClient, requested_handles: set[str]) -> dict[str, Any]:
+def _store_job(store_input: str, data: dict[str, Any], client: HttpClient, allowance: int, existing_identities: set[tuple[str, str]]) -> dict[str, Any]:
     observed = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
     result = {"input_url": store_input, "resolved_store_url": None, "status": "failed", "endpoint_mode": "observed_unauthenticated_products_json", "pages_requested": 0, "products_fetched": 0, "duplicates": 0, "records": [], "errors": [], "coverage": "not_available"}
     try:
         _, resolved = client.get_bytes(store_input)
         origin = _origin(resolved)
-        result["resolved_store_url"] = origin
-        currency = _currency(client, origin)
+        result["resolved_store_url"] = resolved
+        currency = _currency(client, resolved)
         seen: set[str] = set()
+        page_signatures: set[str] = set()
         for page in range(1, MAX_CATALOG_PAGES + 1):
-            remaining = data["maxProducts"]
-            endpoint = f"{origin}/products.json?limit={min(CATALOG_PAGE_SIZE, remaining)}&page={page}"
+            remaining = max(1, allowance - len(result["records"]))
+            endpoint = urljoin(resolved.rstrip("/") + "/", f"products.json?limit={min(CATALOG_PAGE_SIZE, remaining)}&page={page}")
             payload, _ = client.get_json(endpoint)
             result["pages_requested"] += 1
             rows = payload.get("products") if isinstance(payload, dict) else None
             if not isinstance(rows, list):
                 raise ExtractionError("catalog response lacked a products array")
+            signature = hashlib.sha256(json.dumps(rows, sort_keys=True, default=str).encode()).hexdigest()
+            if signature in page_signatures:
+                raise ExtractionError("catalog pagination made no progress: repeated page")
+            page_signatures.add(signature)
             result["products_fetched"] += len(rows)
             if not rows:
                 result["coverage"] = "complete_until_empty_page"
@@ -318,12 +356,17 @@ def _store_job(store_input: str, data: dict[str, Any], client: HttpClient, reque
                     result["duplicates"] += 1
                     continue
                 seen.add(key)
-                if len(result["records"]) < data["maxProducts"]:
-                    result["records"].append(normalize_product(product, origin, endpoint, currency, observed))
-                if len(result["records"]) >= data["maxProducts"]:
+                identity = _identity(origin, key)
+                if identity in existing_identities:
+                    result["duplicates"] += 1
+                    continue
+                if len(result["records"]) < allowance:
+                    result["records"].append(normalize_product(product, resolved, endpoint, currency, observed))
+                    existing_identities.add(identity)
+                if len(result["records"]) >= allowance:
                     result["coverage"] = "truncated_at_global_cap"
                     break
-            if len(result["records"]) >= data["maxProducts"]:
+            if len(result["records"]) >= allowance:
                 break
             if len(rows) < CATALOG_PAGE_SIZE:
                 result["coverage"] = "complete_short_page"
@@ -338,7 +381,7 @@ def _store_job(store_input: str, data: dict[str, Any], client: HttpClient, reque
     return result
 
 
-def _product_job(url: str, data: dict[str, Any], client: HttpClient) -> dict[str, Any]:
+def _product_job(url: str, client: HttpClient) -> dict[str, Any]:
     result = {"input_url": url, "status": "failed", "records": [], "errors": []}
     handle = _handle_from_url(url)
     if not handle:
@@ -346,13 +389,16 @@ def _product_job(url: str, data: dict[str, Any], client: HttpClient) -> dict[str
         return result
     try:
         _, resolved_home = client.get_bytes(url)
-        origin = _origin(resolved_home)
-        currency = _currency(client, origin)
-        endpoint = f"{origin}/products/{handle}.js"
+        resolved_handle = _handle_from_url(resolved_home)
+        if not resolved_handle:
+            raise ExtractionError("redirected product URL lacked a /products/{handle} path")
+        product_path = urlparse(resolved_home).path.rstrip("/") + ".js"
+        endpoint = urlunparse((urlparse(resolved_home).scheme, urlparse(resolved_home).netloc, product_path, "", "", ""))
+        currency = _currency(client, resolved_home)
         product, _ = client.get_json(endpoint)
         if not isinstance(product, dict) or product.get("id") is None:
             raise ExtractionError("product response lacked a product ID")
-        result["records"].append(normalize_product(product, origin, endpoint, currency, datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")))
+        result["records"].append(normalize_product(product, resolved_home, endpoint, currency, datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")))
         result["status"] = "success"
     except ExtractionError as exc:
         result["errors"].append(str(exc))
@@ -364,21 +410,31 @@ def extract(data: dict[str, Any], client: Optional[HttpClient] = None) -> dict[s
     client = client or HttpClient(data["requestTimeoutSecs"], data["retries"], data["maxConcurrencyPerDomain"])
     stores = list(dict.fromkeys(data["storeUrls"]))
     products = list(dict.fromkeys(data["productUrls"]))
-    jobs = []
-    with ThreadPoolExecutor(max_workers=max(1, min(8, len(stores) + len(products)))) as pool:
-        for store in stores:
-            jobs.append(pool.submit(_store_job, store, data, client, set()))
-        for product in products:
-            jobs.append(pool.submit(_product_job, product, data, client))
-        outcomes = [future.result() for future in as_completed(jobs)]
+    outcomes = []
+    skipped_inputs: list[str] = []
     records: list[dict[str, Any]] = []
     identities: set[tuple[str, str]] = set()
     duplicates = 0
     errors: list[str] = []
-    for outcome in outcomes:
+    for store in stores:
+        if len(records) >= data["maxProducts"]:
+            skipped_inputs.append(store)
+            continue
+        outcome = _store_job(store, data, client, data["maxProducts"] - len(records), identities)
+        outcomes.append(outcome)
         errors.extend(f"{outcome['input_url']}: {e}" for e in outcome.get("errors", []))
         for record in outcome.get("records", []):
-            identity = (record["store_url"].lower(), str(record["product_id"]))
+            records.append(record)
+        duplicates += int(outcome.get("duplicates", 0))
+    for product in products:
+        if len(records) >= data["maxProducts"]:
+            skipped_inputs.append(product)
+            continue
+        outcome = _product_job(product, client)
+        outcomes.append(outcome)
+        errors.extend(f"{outcome['input_url']}: {e}" for e in outcome.get("errors", []))
+        for record in outcome.get("records", []):
+            identity = _identity(record["store_url"], record["product_id"])
             if identity in identities:
                 duplicates += 1
                 continue
@@ -386,7 +442,7 @@ def extract(data: dict[str, Any], client: Optional[HttpClient] = None) -> dict[s
             if len(records) < data["maxProducts"]:
                 records.append(record)
     store_outcomes = [x for x in outcomes if "resolved_store_url" in x]
-    candidate_count = sum(len(x.get("records", [])) for x in outcomes)
+    candidate_count = sum(int(x.get("products_fetched", len(x.get("records", [])))) for x in outcomes)
     cap = len(records) >= data["maxProducts"] and (candidate_count > data["maxProducts"] or any(x.get("coverage") == "truncated_at_global_cap" for x in store_outcomes))
     summary = {
         "effective_input": data,
@@ -400,7 +456,9 @@ def extract(data: dict[str, Any], client: Optional[HttpClient] = None) -> dict[s
             for x in store_outcomes
         ),
         "coverage": "bounded_global_cap" if cap else "per-store endpoint coverage only; no territory completeness claim",
-        "store_outcomes": store_outcomes,
+        "store_outcomes": [{k: v for k, v in x.items() if k != "records"} for x in store_outcomes],
+        "product_outcomes": [{k: v for k, v in x.items() if k != "records"} for x in outcomes if "resolved_store_url" not in x],
+        "skipped_inputs": skipped_inputs,
         "errors": errors,
         "resource": {"requests": client.requests, "retries": client.retries_used, "bytes_received": client.bytes, "elapsed_seconds": round(time.monotonic() - started, 3), "http_errors": client.errors[:50]},
         "source_handling": {"individual_product_endpoint": "documented Shopify Ajax Product API /products/{handle}.js", "catalog_endpoint": "observed unauthenticated storefront /products.json pagination; not presented as an official Shopify API contract", "browser_fallback": False},

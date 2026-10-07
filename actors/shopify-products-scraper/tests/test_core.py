@@ -2,7 +2,7 @@ import json
 
 import pytest
 
-from shopify_actor.core import ExtractionError, InputError, extract, normalize_product, validate_input
+from shopify_actor.core import ExtractionError, HttpClient, InputError, _product_job, extract, normalize_product, validate_input
 
 
 def product(pid, handle="one", **extra):
@@ -54,6 +54,38 @@ def test_normalization_preserves_nulls_and_presentment_currency():
     assert record["description_text"] == "Hello world"
 
 
+def test_endpoint_specific_fields_and_locale_path_are_preserved():
+    ajax = {"id": 1, "handle": "one", "description": "<p>Ajax description</p>", "type": "Ajax type", "variants": []}
+    record = normalize_product(ajax, "https://shop.example/en-us/products/one", "https://shop.example/en-us/products/one.js", "CAD", "now")
+    assert record["description_text"] == "Ajax description"
+    assert record["product_type"] == "Ajax type"
+    assert record["canonical_product_url"].endswith("/en-us/products/one")
+
+
+def test_product_job_uses_resolved_locale_path_for_ajax_endpoint():
+    class LocaleClient(FakeClient):
+        def __init__(self):
+            super().__init__([])
+            self.json_urls = []
+
+        def get_bytes(self, url):
+            self.requests += 1
+            return b"<html />", "https://shop.example/en-us/products/resolved"
+
+        def get_json(self, url):
+            self.requests += 1
+            self.json_urls.append(url)
+            if url.endswith("/cart.js"):
+                return {"currency": "CAD"}, url
+            return {"id": 1, "handle": "resolved", "description": "Ajax", "type": "Type", "variants": []}, url
+
+    client = LocaleClient()
+    result = _product_job("https://shop.example/products/original", client)
+    assert result["status"] == "success"
+    assert "https://shop.example/en-us/products/resolved.js" in client.json_urls
+    assert "https://shop.example/en-us/cart.js" in client.json_urls
+
+
 def test_overlapping_store_and_product_inputs_deduplicate_by_store_and_product_id():
     client = FakeClient([[product(1, "one")]], {"one": product(1, "one")})
     result = extract(data(productUrls=["https://shop.example/products/one"]), client)
@@ -73,6 +105,22 @@ def test_multi_page_catalog_and_global_cap():
     assert [r["product_id"] for r in result["records"]] == [str(i) for i in range(300)]
     assert result["summary"]["cap_truncated"] is True
     assert result["summary"]["records_fetched"] == 350
+
+
+def test_multi_store_collection_stops_at_shared_cap_and_identifies_skips():
+    client = FakeClient([[product(1), product(2)]])
+    result = extract(data(storeUrls=["https://one.example", "https://two.example"], maxProducts=1), client)
+    assert len(result["records"]) == 1
+    assert result["summary"]["skipped_inputs"] == ["https://two.example"]
+    assert len(result["summary"]["store_outcomes"]) == 1
+
+
+def test_repeated_catalog_page_is_reported_as_no_progress():
+    repeated = [product(i) for i in range(250)]
+    client = FakeClient([repeated, repeated])
+    result = extract(data(maxProducts=500), client)
+    assert any("repeated page" in error for error in result["summary"]["errors"])
+    assert result["summary"]["store_outcomes"][0]["status"] == "partial"
 
 
 def test_pagination_failure_is_preserved_with_partial_records():
@@ -98,3 +146,21 @@ def test_input_rejects_non_public_destinations_and_requires_input():
         validate_input({})
     with pytest.raises(InputError):
         validate_input({"storeUrls": ["http://127.0.0.1"]})
+
+
+def test_http_client_rejects_private_dns_before_open(monkeypatch):
+    opened = False
+
+    def fake_getaddrinfo(*args, **kwargs):
+        return [(None, None, None, None, ("127.0.0.1", 80))]
+
+    class NeverOpen:
+        def open(self, *args, **kwargs):
+            nonlocal opened
+            opened = True
+            raise AssertionError("private destination was opened")
+
+    monkeypatch.setattr("shopify_actor.core.socket.getaddrinfo", fake_getaddrinfo)
+    with pytest.raises(ExtractionError):
+        HttpClient(5, 0, 1, opener=NeverOpen()).get_bytes("https://evil.example/")
+    assert not opened

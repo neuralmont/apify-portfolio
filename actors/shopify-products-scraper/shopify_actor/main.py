@@ -41,6 +41,8 @@ async def main() -> None:
                 break
 
         summary = result["summary"]
+        for key in ("store_outcomes", "product_outcomes"):
+            summary[key] = [{field: value for field, value in outcome.items() if field != "records"} for outcome in summary.get(key, [])]
         extraction_errors = list(summary.get("errors") or [])
         summary["records_delivered"] = delivered
         summary["requested_result_completion"] = "complete" if delivered == len(result["records"]) and not extraction_errors and not delivery_error and not billing_error else "incomplete"
