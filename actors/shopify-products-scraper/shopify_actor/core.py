@@ -346,6 +346,7 @@ def _store_job(store_input: str, data: dict[str, Any], client: HttpClient, allow
             if not rows:
                 result["coverage"] = "complete_until_empty_page"
                 break
+            new_page_records = 0
             for product in rows:
                 pid = product.get("id")
                 key = str(pid) if pid is not None else None
@@ -363,11 +364,14 @@ def _store_job(store_input: str, data: dict[str, Any], client: HttpClient, allow
                 if len(result["records"]) < allowance:
                     result["records"].append(normalize_product(product, resolved, endpoint, currency, observed))
                     existing_identities.add(identity)
+                    new_page_records += 1
                 if len(result["records"]) >= allowance:
                     result["coverage"] = "truncated_at_global_cap"
                     break
             if len(result["records"]) >= allowance:
                 break
+            if new_page_records == 0:
+                raise ExtractionError("catalog pagination made no progress: page had no new product IDs")
             if len(rows) < CATALOG_PAGE_SIZE:
                 result["coverage"] = "complete_short_page"
                 break

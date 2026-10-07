@@ -123,6 +123,13 @@ def test_repeated_catalog_page_is_reported_as_no_progress():
     assert result["summary"]["store_outcomes"][0]["status"] == "partial"
 
 
+def test_duplicate_only_catalog_page_is_incomplete():
+    client = FakeClient([[product(i) for i in range(250)], [product(0)]])
+    result = extract(data(maxProducts=500), client)
+    assert any("no new product IDs" in error for error in result["summary"]["errors"])
+    assert result["summary"]["pagination_complete"] is False
+
+
 def test_pagination_failure_is_preserved_with_partial_records():
     client = FakeClient([[product(i) for i in range(250)], [product(250)]], fail_page=2)
     result = extract(data(maxProducts=300), client)
