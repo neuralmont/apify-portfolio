@@ -1,16 +1,16 @@
 # 30-day paid-beta measurement plan
 
-This plan starts when the paid beta becomes publicly available on the Store, not while the Actor is private. Current customer charging is disabled, so all metrics below are presently unavailable. The four existing benchmark runs and any owner/test runs are excluded from customer metrics.
+This plan starts on the public paid-beta launch date, 2026-10-07. The Actor is public and configured for `$0.003` per delivered permit record; the first launch-day metrics below are not yet available. The four existing benchmark runs and all owner/test runs are excluded from customer metrics.
 
 Capture a daily export of Actor run metadata, usage, PPE event charges, and acquisition attribution. Use the Apify run ID and customer/account identifier for deduplication; do not count retries as new users or runs. Review a daily dashboard and a day-7, day-14, and day-30 summary.
 
 | Metric | Definition | Current status |
 | --- | --- | --- |
-| External users | Unique non-owner accounts with at least one completed beta run; report free-plan and paid-plan users separately | Unavailable; no customer charging is active |
-| Paying users | Unique non-owner accounts with at least one billed `permit-record` event; free-plan activity excluded | Unavailable |
+| External users | Unique non-owner accounts with at least one completed beta run; report free-plan and paid-plan users separately | Unavailable at launch; collect from public run metadata |
+| Paying users | Unique non-owner accounts with at least one billed `permit-record` event; free-plan activity excluded | Unavailable at launch |
 | Repeat paying users | Paying users with billed runs on two or more separate days; free-plan activity excluded | Unavailable |
-| Revenue | Apify's actual customer earnings/payout metric for this Actor, reconciled to billed `permit-record` events; do not substitute gross test usage | Unavailable |
-| Platform costs | Apify run usage for customer runs; build costs tracked separately and free-plan usage reported separately from revenue-generating customers | Unavailable for customers; prior benchmark costs are excluded |
+| Revenue | Apify's actual customer earnings/payout metric for this Actor, reconciled to billed `permit-record` events; do not substitute gross test usage | Unavailable at launch |
+| Platform costs | Apify run usage for customer runs; build costs tracked separately and free-plan usage reported separately from revenue-generating customers | Unavailable for customers at launch; prior benchmark/build costs are excluded |
 | Failures | Runs with failed status or incomplete `RUN_SUMMARY`; track source, billing-limit, validation, and timeout causes separately | Available after activation from run metadata and summaries |
 | Acquisition source | Tagged referral/source on the first customer run or checkout/referral record | Unavailable until attribution is configured |
 

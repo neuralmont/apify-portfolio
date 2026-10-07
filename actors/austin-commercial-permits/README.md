@@ -57,4 +57,4 @@ This is a small observation sample, not a promise that every future record has t
 
 Open the run's default dataset and choose JSON, CSV, or another Apify-supported export. Open `RUN_SUMMARY` for source counts, delivered rows, truncation, errors, pagination, and resource diagnostics. Open `CONTRACTOR_SUMMARY` for run-local contractor activity. Compare contractor names and supporting permit IDs as activity indicators, not as project counts or qualified leads.
 
-For a step-by-step workflow, see [TUTORIAL.md](TUTORIAL.md). For release status and private verification, see [LAUNCH_READINESS.md](LAUNCH_READINESS.md).
+For a step-by-step workflow, see [TUTORIAL.md](TUTORIAL.md). For operational release status, see [LAUNCH_READINESS.md](LAUNCH_READINESS.md).

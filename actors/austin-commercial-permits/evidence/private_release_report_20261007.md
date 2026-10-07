@@ -42,4 +42,15 @@ The exact real-SDK local evidence remains `evidence/billing_sdk_integration_2026
 
 ## Remaining platform requirement
 
-No publication is required for this saved private configuration. Before any customer launch, complete the separate release review and any Console payout/KYC requirements. This pass did not publish, enable schedules, or run customer billing.
+## Public beta launch
+
+The Actor was published on 2026-10-07 at `2026-10-07T13:30:42.255Z` UTC.
+
+- Public URL: https://apify.com/purple_beep_boop/austin-commercial-permits
+- Published build: `0.2.1` / `aHA3Ib9CQYkNM4pcu`
+- Final public pricing: PPE, `permit-record` at `$0.003` per delivered record (`$3/1,000`); platform usage and contractor summaries included.
+- No synthetic dataset-item, actor-start, or contractor-summary event is configured.
+- The Store page visibly displayed the title, price, source link, README, example input, and small output sample. The public build OpenAPI metadata and authenticated input validation both succeeded.
+- The browser Console session was not authenticated, so the Pay per event + usage switch was not independently observed visually; the authenticated platform readback showed only the PPE event configuration and no usage event/pass-through field.
+
+The paid-beta measurement window begins at this launch timestamp. Existing benchmarks and owner/test runs remain excluded from demand, paying-user, revenue, and acquisition metrics. No schedules or outreach were created.

@@ -10,4 +10,4 @@
 - **Result cap:** 5,000 delivered permit records per run
 - **Public-source link:** https://data.austintexas.gov/d/3syk-w9eu
 
-Do not claim demand, guaranteed freshness, exclusivity, project counts, or qualified leads. The listing is ready for release after the private platform configuration is read back and approved.
+Do not claim demand, guaranteed freshness, exclusivity, project counts, or qualified leads. The listing was published as a paid public beta on 2026-10-07; owner/test runs remain excluded from launch measurement.
