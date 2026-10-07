@@ -1,0 +1,49 @@
+{
+  "sdk": {
+    "apify": "4.0.2",
+    "apify_client": "3.2.1",
+    "crawlee": "1.10.4",
+    "python": "3.11.14"
+  },
+  "mode": "ACTOR_TEST_PAY_PER_EVENT=true; fixture extraction; local storage; owner/test accounting only",
+  "local_event_price": "$1 simulated per event; not the proposed $0.003 Console price",
+  "synthetic_default_event_note": "The local test log emitted apify-default-dataset-item in addition to permit-record; remove or zero that event in the private Console configuration before activation.",
+  "checks": [
+    {
+      "request_records": 3,
+      "local_max_total_charge_usd": 10,
+      "dataset_rows": 3,
+      "permit_record_events": 3,
+      "synthetic_default_dataset_events": 3,
+      "contractor_summary_permit_count": 3,
+      "completion": "complete",
+      "requested_result_completion": "complete",
+      "process_exit_status": 0,
+      "billing_limit_reached": false
+    },
+    {
+      "request_records": 3,
+      "local_max_total_charge_usd": 4,
+      "dataset_rows": 2,
+      "permit_record_events": 2,
+      "synthetic_default_dataset_events": 2,
+      "contractor_summary_permit_count": 2,
+      "completion": "incomplete",
+      "requested_result_completion": "incomplete",
+      "process_exit_status": 0,
+      "billing_limit_reached": true
+    },
+    {
+      "request_records": 2,
+      "local_max_total_charge_usd": 4,
+      "dataset_rows": 2,
+      "permit_record_events": 2,
+      "synthetic_default_dataset_events": 2,
+      "contractor_summary_permit_count": 2,
+      "completion": "complete",
+      "requested_result_completion": "complete",
+      "process_exit_status": 0,
+      "billing_limit_reached": true
+    }
+  ]
+}

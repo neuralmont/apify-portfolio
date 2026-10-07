@@ -1,6 +1,6 @@
 # Austin Commercial Building Permits & Contractor Activity
 
-Find recently issued commercial building permits in Austin's official public [Issued Construction Permits dataset](https://data.austintexas.gov/d/3syk-w9eu). This private beta is intended first for construction suppliers researching contractor activity.
+Find recently issued commercial building permits in Austin's official public [Issued Construction Permits dataset](https://data.austintexas.gov/d/3syk-w9eu). It is intended first for construction suppliers researching contractor activity.
 
 The Actor returns source permit records; a permit is not a distinct construction project, a qualified lead, or evidence of demand. It does not enrich records, infer commercial use from address text, or claim exclusivity, guaranteed freshness, or complete territory coverage.
 
@@ -16,9 +16,7 @@ The contractor summary groups the exact source company and trade values found in
 
 ## Pricing
 
-Proposed paid-beta pricing is `$0.003` per delivered permit record (`$3 per 1,000`). Only visible permit records use the `permit-record` pay-per-event. Source counts, discarded duplicates, diagnostics, and contractor-summary rows are not charged. Platform usage is included in this proposed price: keep Apify's **Pay per event + usage** option OFF. There is no additional start fee for this initial beta. Customer spending limits can stop a run after a partial delivery; `RUN_SUMMARY` preserves the delivered count and reason.
-
-Pricing is prepared but customer charging remains disabled while this Actor is private. See [PRICING_CONFIGURATION.md](PRICING_CONFIGURATION.md) for the review checklist; do not enable it until the release checklist is approved.
+Launch pricing is `$0.003` per delivered permit record (`$3 per 1,000`). Only visible permit records use the `permit-record` pay-per-event. Platform usage and the contractor activity summary are included; there is no separate summary charge. Source counts, discarded duplicates, and diagnostics are not charged. Customer spending limits can stop a run after a partial delivery; `RUN_SUMMARY` preserves the delivered count and reason.
 
 ## Example input
 
