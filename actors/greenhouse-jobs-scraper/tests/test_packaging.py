@@ -11,6 +11,8 @@ def test_manifest_paths_and_schemas_are_valid():
     for key in ("input", "output"):
         assert (ROOT / ".actor" / manifest[key].removeprefix("./")).exists()
     assert (ROOT / ".actor/dataset_schema.json").exists()
+    assert (ROOT / "greenhouse_actor/directory.json").exists()
+    assert (ROOT / "scripts/refresh_directory.py").exists()
     json.loads((ROOT / ".actor/input_schema.json").read_text())
     json.loads((ROOT / ".actor/output_schema.json").read_text())
     json.loads((ROOT / ".actor/dataset_schema.json").read_text())

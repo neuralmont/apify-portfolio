@@ -28,7 +28,8 @@ async def main() -> None:
         delivery_error = None
         billing_error = None
         cap_truncated = False
-        for index, token in enumerate(data["boards"]):
+        for index, spec in enumerate(data["board_specs"]):
+            token = spec["board_token"]
             if delivered >= data["maxJobs"]:
                 skipped.extend(data["boards"][index:])
                 cap_truncated = True
@@ -41,6 +42,7 @@ async def main() -> None:
                 data["maxJobs"] - delivered,
                 identities,
                 retrieved_at,
+                spec.get("company_name"),
             )
             outcome = board_result["outcome"]
             outcomes.append(outcome)
@@ -84,11 +86,18 @@ async def main() -> None:
             delivered >= data["maxJobs"] or (not limit_reached and all_matching_delivered)
         )
         summary = {
+            "search_mode": data["mode"],
+            "directory_version": data["directory_version"],
+            "directory_size": data["directory_size"],
             "boards_requested": len(data["boards"]),
+            "boards_available": data["directory_size"] if data["mode"] == "directory" else len(data["board_specs"]),
             "boards_processed": len(outcomes),
+            "boards_attempted": len(outcomes),
+            "boards_succeeded": sum(outcome["status"] == "success" for outcome in outcomes),
             "boards_skipped": len(skipped),
             "boards_failed": sum(outcome["status"] == "failed" for outcome in outcomes),
             "records_fetched": sum(outcome["jobs_fetched"] for outcome in outcomes),
+            "records_examined": sum(outcome["jobs_fetched"] for outcome in outcomes),
             "records_matched": records_matched,
             "records_selected": records_selected,
             "records_delivered": delivered,
@@ -98,6 +107,7 @@ async def main() -> None:
             "skipped_boards": skipped,
             "requested_result_completion": "complete" if requested_complete else "incomplete",
             "full_input_coverage": not skipped and not extraction_errors and not delivery_error and not billing_error,
+            "all_selected_boards_searched": not skipped and not extraction_errors and not delivery_error and not billing_error,
             "all_matching_jobs_delivered": all_matching_delivered,
             "coverage": "bounded_global_cap" if cap_truncated else ("partial_with_errors" if extraction_errors or delivery_error or billing_error else "all_requested_boards"),
             "board_outcomes": outcomes,

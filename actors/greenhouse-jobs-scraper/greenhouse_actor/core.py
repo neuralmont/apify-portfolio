@@ -7,6 +7,7 @@ import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from html.parser import HTMLParser
+from pathlib import Path
 from typing import Any, Callable, Optional
 from urllib.error import HTTPError, URLError
 from urllib.parse import quote, urlparse
@@ -17,6 +18,7 @@ MAX_BOARDS = 50
 MAX_JOBS = 5000
 TRANSIENT = {408, 425, 429, 500, 502, 503, 504}
 TOKEN_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]*$")
+DIRECTORY_PATH = Path(__file__).with_name("directory.json")
 
 
 class InputError(ValueError):
@@ -93,20 +95,77 @@ def normalize_board(value: Any) -> str:
     return token
 
 
+def load_directory() -> dict[str, Any]:
+    directory = json.loads(DIRECTORY_PATH.read_text())
+    companies = directory.get("companies") if isinstance(directory, dict) else None
+    if not isinstance(companies, list):
+        raise InputError("tracked company directory is malformed")
+    tokens = set()
+    for company in companies:
+        if not isinstance(company, dict) or not isinstance(company.get("board_token"), str) or not isinstance(company.get("company_name"), str):
+            raise InputError("tracked company directory contains an invalid entry")
+        if company["board_token"] in tokens:
+            raise InputError("tracked company directory contains duplicate board tokens")
+        tokens.add(company["board_token"])
+    return directory
+
+
 def validate_input(raw: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(raw, dict):
         raise InputError("input must be a JSON object")
-    boards = raw.get("boards")
-    if not isinstance(boards, list) or not boards:
-        raise InputError("boards must be a non-empty array")
-    if len(boards) > MAX_BOARDS:
-        raise InputError(f"boards cannot contain more than {MAX_BOARDS} entries")
-    unique = list(dict.fromkeys(normalize_board(board) for board in boards))
+    directory = load_directory()
+    mode = raw.get("mode")
+    if mode is None:
+        mode = "specific" if raw.get("boards") is not None else "directory"
+    if mode not in {"directory", "specific"}:
+        raise InputError("mode must be directory or specific")
+    directory_by_token = {company["board_token"]: company for company in directory["companies"]}
+    requested_company_tokens = raw.get("companyTokens") or []
+    if not isinstance(requested_company_tokens, list) or any(not isinstance(token, str) or not token.strip() for token in requested_company_tokens):
+        raise InputError("companyTokens must be an array of non-empty strings")
+    requested_company_tokens = list(dict.fromkeys(token.strip() for token in requested_company_tokens))
+    unknown_companies = [token for token in requested_company_tokens if token not in directory_by_token]
+    if unknown_companies:
+        raise InputError(f"companyTokens not found in tracked directory: {', '.join(unknown_companies)}")
+    raw_additional = raw.get("additionalBoards") or []
+    if not isinstance(raw_additional, list):
+        raise InputError("additionalBoards must be an array")
+    raw_legacy = raw.get("boards")
+    if raw_legacy is not None and not isinstance(raw_legacy, list):
+        raise InputError("boards must be an array")
+    if mode == "directory":
+        if raw.get("boards") is not None or raw_additional:
+            raise InputError("directory mode searches tracked companies only; use specific mode for custom boards")
+        if not any(raw.get(name) for name in ("titleKeywords", "locationKeywords", "departmentKeywords")):
+            raise InputError("directory mode requires at least one nonempty title, location, or department filter")
+        selected = [company for company in directory["companies"] if not requested_company_tokens or company["board_token"] in requested_company_tokens]
+    else:
+        selected = [directory_by_token[token] for token in requested_company_tokens]
+        raw_boards = list(raw_additional) + (list(raw_legacy) if raw_legacy is not None else [])
+        for value in raw_boards:
+            token = normalize_board(value)
+            if token not in {company["board_token"] for company in selected}:
+                selected.append(directory_by_token.get(token, {"board_token": token, "company_name": None, "source_url": None}))
+        if not selected:
+            raise InputError("specific mode requires a tracked company, additional board, or legacy boards input")
+    if len(selected) > MAX_BOARDS:
+        raise InputError(f"the selected boards cannot exceed {MAX_BOARDS}")
+    board_specs = []
+    seen = set()
+    for company in selected:
+        token = normalize_board(company["board_token"])
+        if token not in seen:
+            seen.add(token)
+            board_specs.append({"board_token": token, "company_name": company.get("company_name"), "source_url": company.get("source_url")})
     max_jobs = raw.get("maxJobs", 100)
     if isinstance(max_jobs, bool) or not isinstance(max_jobs, int) or not 1 <= max_jobs <= MAX_JOBS:
         raise InputError(f"maxJobs must be an integer from 1 to {MAX_JOBS}")
     return {
-        "boards": unique,
+        "mode": mode,
+        "directory_version": directory["version"],
+        "directory_size": len(directory["companies"]),
+        "board_specs": board_specs,
+        "boards": [spec["board_token"] for spec in board_specs],
         "maxJobs": max_jobs,
         "titleKeywords": _clean_keywords(raw.get("titleKeywords"), "titleKeywords"),
         "locationKeywords": _clean_keywords(raw.get("locationKeywords"), "locationKeywords"),
@@ -134,7 +193,7 @@ def _matches(job: dict[str, Any], data: dict[str, Any]) -> bool:
     return all(not group or any(keyword in haystack for keyword in group) for group, haystack in ((data["titleKeywords"], title), (data["locationKeywords"], location), (data["departmentKeywords"], departments)))
 
 
-def normalize_job(board_token: str, job: dict[str, Any], retrieved_at: str) -> dict[str, Any]:
+def normalize_job(board_token: str, job: dict[str, Any], retrieved_at: str, company_name: Optional[str] = None) -> dict[str, Any]:
     if not isinstance(job, dict):
         raise ExtractionError(f"board {board_token} returned a non-object job")
     location = job.get("location")
@@ -146,6 +205,7 @@ def normalize_job(board_token: str, job: dict[str, Any], retrieved_at: str) -> d
     content = job.get("content")
     return {
         "source": "greenhouse",
+        "company_name": company_name,
         "board_token": board_token,
         "job_id": str(job_id),
         "internal_job_id": str(job["internal_job_id"]) if job.get("internal_job_id") is not None else None,
@@ -233,6 +293,7 @@ def extract_board(
     allowance: int,
     identities: Optional[set[tuple[str, str]]] = None,
     retrieved_at: Optional[str] = None,
+    company_name: Optional[str] = None,
 ) -> dict[str, Any]:
     """Fetch and select one board, returning only records within the allowance."""
     identities = identities if identities is not None else set()
@@ -263,7 +324,7 @@ def extract_board(
             if len(selected) >= allowance:
                 outcome["coverage"] = "truncated_at_global_cap"
                 continue
-            record = normalize_job(token, item, retrieved_at)
+            record = normalize_job(token, item, retrieved_at, company_name)
             scoped_identity = (token, record["job_id"])
             if scoped_identity in identities:
                 outcome["duplicates"] += 1
@@ -295,12 +356,13 @@ def extract(data: dict[str, Any], client: Optional[GreenhouseClient] = None) -> 
     errors: list[str] = []
     skipped: list[str] = []
     cap_stop = False
-    for index, token in enumerate(data["boards"]):
+    for index, spec in enumerate(data["board_specs"]):
+        token = spec["board_token"]
         if len(records) >= data["maxJobs"]:
             cap_stop = True
             skipped.extend(data["boards"][index:])
             break
-        result = extract_board(data, token, client, data["maxJobs"] - len(records), identities, retrieved_at)
+        result = extract_board(data, token, client, data["maxJobs"] - len(records), identities, retrieved_at, spec.get("company_name"))
         outcome = result["outcome"]
         records.extend(result["records"])
         if outcome["errors"]:
@@ -317,11 +379,18 @@ def extract(data: dict[str, Any], client: Optional[GreenhouseClient] = None) -> 
     all_matching_delivered = not errors and not skipped and not cap_stop
     elapsed = round(time.monotonic() - started, 3)
     summary = {
+        "search_mode": data["mode"],
+        "directory_version": data["directory_version"],
+        "directory_size": data["directory_size"],
         "boards_requested": len(data["boards"]),
+        "boards_available": data["directory_size"] if data["mode"] == "directory" else len(data["board_specs"]),
         "boards_processed": len(outcomes),
+        "boards_attempted": len(outcomes),
+        "boards_succeeded": sum(outcome["status"] == "success" for outcome in outcomes),
         "boards_skipped": len(skipped),
         "boards_failed": sum(outcome["status"] == "failed" for outcome in outcomes),
         "records_fetched": sum(outcome["jobs_fetched"] for outcome in outcomes),
+        "records_examined": sum(outcome["jobs_fetched"] for outcome in outcomes),
         "records_matched": sum(outcome["jobs_matched"] for outcome in outcomes),
         "records_selected": sum(outcome["jobs_selected"] for outcome in outcomes),
         "records_delivered": len(records),
@@ -331,6 +400,7 @@ def extract(data: dict[str, Any], client: Optional[GreenhouseClient] = None) -> 
         "skipped_boards": skipped,
         "requested_result_completion": "complete" if not errors and (len(records) >= data["maxJobs"] or all_matching_delivered) else "incomplete",
         "full_input_coverage": not skipped and not errors,
+        "all_selected_boards_searched": not skipped and not errors,
         "all_matching_jobs_delivered": all_matching_delivered,
         "coverage": "bounded_global_cap" if cap_stop else ("partial_with_errors" if errors else "all_requested_boards"),
         "board_outcomes": outcomes,

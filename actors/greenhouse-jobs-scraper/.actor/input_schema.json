@@ -1,14 +1,16 @@
 {
   "title": "Greenhouse Jobs Scraper input",
-  "description": "Extract public jobs from specified Greenhouse board tokens or standard board URLs.",
+  "description": "Search jobs across our tracked Greenhouse company boards, or use Specific companies for explicit boards.",
   "type": "object",
   "schemaVersion": 1,
   "properties": {
-    "boards": {"title":"Greenhouse boards","type":"array","description":"Board tokens or https://boards.greenhouse.io/{token} / https://job-boards.greenhouse.io/{token} URLs.","editor":"stringList","minItems":1,"maxItems":50,"items":{"type":"string"}},
+    "mode": {"title":"Search mode","type":"string","description":"Default searches the maintained directory. Specific companies preserves the legacy boards input and permits additional boards.","editor":"select","enum":["directory","specific"],"enumTitles":["Search tracked companies","Specific companies"],"default":"directory"},
+    "companyTokens": {"title":"Tracked companies","type":"array","description":"Optional board tokens from the maintained directory. The Console supports a string list; enter tokens such as stripe or airbnb.","editor":"stringList","items":{"type":"string"}},
+    "additionalBoards": {"title":"Additional board URLs or tokens","type":"array","description":"Optional public Greenhouse board tokens or standard board URLs for Specific companies mode.","editor":"stringList","maxItems":50,"items":{"type":"string"}},
+    "boards": {"title":"Legacy Greenhouse boards","type":"array","description":"Backward-compatible board tokens or https://boards.greenhouse.io/{token} / https://job-boards.greenhouse.io/{token} URLs. Supplying boards without mode selects Specific companies mode.","editor":"stringList","maxItems":50,"items":{"type":"string"}},
     "maxJobs": {"title":"Maximum delivered jobs","type":"integer","description":"Global cap across all boards.","default":100,"minimum":1,"maximum":5000},
-    "titleKeywords": {"title":"Title keywords","type":"array","description":"Case-insensitive OR matching within the job title.","editor":"stringList","items":{"type":"string"}},
-    "locationKeywords": {"title":"Location keywords","type":"array","description":"Case-insensitive OR matching within source location text.","editor":"stringList","items":{"type":"string"}},
-    "departmentKeywords": {"title":"Department keywords","type":"array","description":"Case-insensitive OR matching within department names.","editor":"stringList","items":{"type":"string"}}
-  },
-  "required": ["boards"]
+    "titleKeywords": {"title":"Job-title keywords","type":"array","description":"Case-insensitive literal OR matching within employer-provided job titles.","editor":"stringList","items":{"type":"string"}},
+    "locationKeywords": {"title":"Location keywords","type":"array","description":"Case-insensitive literal OR matching within employer-provided location text; no radius or geocoding.","editor":"stringList","items":{"type":"string"}},
+    "departmentKeywords": {"title":"Department keywords","type":"array","description":"Case-insensitive literal OR matching within department names.","editor":"stringList","items":{"type":"string"}}
+  }
 }

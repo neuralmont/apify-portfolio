@@ -14,13 +14,15 @@ Command from this directory:
 /private/tmp/greenhouse-actor-venv/bin/python -m pytest -q tests
 ```
 
-The suite covers input normalization, duplicate boards, filters, entity decoding, job versus internal IDs, empty/malformed/failed boards, global caps, summary redaction, retry behavior, packaging manifests, and billing ChargeResult semantics.
+The suite covers directory mode, backward-compatible `boards` input, company/custom-board deduplication, filters across boards, zero matches, empty/malformed/failed boards, global caps, summary redaction, retry behavior, packaging manifests, and billing ChargeResult semantics.
 
-Result after the incremental-delivery fix: `17 passed in 0.11s` with Python 3.11.14 and `apify==4.0.2`. New lifecycle coverage verifies that spending limits stop later board requests, summary counts match actual delivery, and malformed later-board data preserves earlier output while failing the run.
+Result after the directory-mode change: `22 passed in 0.27s` with Python 3.11.14 and `apify==4.0.2`. Input schema validation succeeded with `apify validate-schema .actor/input_schema.json`.
 
 ## Live validation
 
 Three independent public boards were reachable during validation: `stripe`, `airbnb`, and `coinbase`. Each returned HTTP 200 from the documented public list endpoint. Separate bounded observations delivered three records per board: 719/160/223 source rows respectively, one request and zero retries per board. Sanitized source IDs and titles are recorded in the evidence file; no job-detail requests were made.
+
+The maintained directory contains 36 distinct companies, verified on 2026-10-07. It is an intentionally bounded sample, not every Greenhouse company. `python3 scripts/refresh_directory.py` rechecked all 36 entries successfully against the public API; no discovery or external dependency was added. The directory order is the search order, and custom boards without a verified mapping receive `company_name: null`.
 
 The corrected private Actor was built from source SHA `cca095a` as build `hJhktQ1576aHL1XLS` (version `0.1.3`) for Actor `FjuIJU6cw0MqWqwKE`. It remains private and unmonetized. The post-fix two-record Stripe smoke run `NJvgGSajhZuiPcaM9` succeeded with two dataset rows, two unique job IDs, 3.247 seconds, 79,466,496-byte peak memory, and measured platform usage of `$0.0007791460208031866`. Its RUN_SUMMARY reported 719 fetched, 719 matched, 2 selected, 2 delivered, one request, zero retries, no errors, `requested_result_completion: complete`, and `all_matching_jobs_delivered: false` because the bounded cap intentionally truncated the board.
 

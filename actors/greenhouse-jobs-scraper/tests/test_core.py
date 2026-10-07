@@ -37,10 +37,48 @@ def test_board_token_url_normalization_and_duplicate_boards():
         normalize_board("https://boards.greenhouse.io/acme/jobs/12")
 
 
+def test_default_directory_mode_requires_filter_and_uses_verified_directory():
+    with pytest.raises(InputError, match="requires at least one"):
+        validate_input({})
+    result = validate_input({"titleKeywords": ["engineer"]})
+    assert result["mode"] == "directory"
+    assert result["directory_size"] == 36
+    assert result["board_specs"][0]["board_token"] == "airbnb"
+    assert result["board_specs"][0]["company_name"] == "Airbnb"
+
+
+def test_legacy_boards_remain_specific_and_custom_boards_are_unnamed():
+    result = validate_input({"boards": ["acme"]})
+    assert result["mode"] == "specific"
+    assert result["boards"] == ["acme"]
+    assert result["board_specs"][0]["company_name"] is None
+
+
+def test_company_selection_and_custom_board_deduplicate():
+    result = validate_input({"mode": "specific", "companyTokens": ["stripe"], "additionalBoards": ["stripe", "https://boards.greenhouse.io/acme"]})
+    assert result["boards"] == ["stripe", "acme"]
+    assert result["board_specs"][0]["company_name"] == "Stripe"
+    assert result["board_specs"][1]["company_name"] is None
+
+
 def test_filters_are_or_within_group_and_and_between_groups():
     client = FakeClient({"acme": {"jobs": [job(1, "Senior Engineer", "New York"), job(2, "Designer", "Remote", departments=[{"name": "Design"}]), job(3, "Data Engineer", "Remote")]}})
     result = extract(data(titleKeywords=["engineer", "designer"], locationKeywords=["remote"]), client)
     assert [row["job_id"] for row in result["records"]] == ["2", "3"]
+
+
+def test_zero_matches_is_a_successful_exhausted_search():
+    client = FakeClient({"acme": {"jobs": [job(1, "Engineer", "Remote")]}})
+    result = extract(data(titleKeywords=["chef"], locationKeywords=["moon"]), client)
+    assert result["records"] == []
+    assert result["summary"]["errors"] == []
+    assert result["summary"]["all_selected_boards_searched"] is True
+
+
+def test_verified_company_name_is_preserved_in_output():
+    client = FakeClient({"stripe": {"jobs": [job(1)]}})
+    result = extract(data(mode="specific", companyTokens=["stripe"], boards=None), client)
+    assert result["records"][0]["company_name"] == "Stripe"
 
 
 def test_html_entities_and_markup_become_readable_text():

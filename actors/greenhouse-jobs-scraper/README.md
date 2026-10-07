@@ -1,62 +1,70 @@
-# Greenhouse Jobs Scraper — Company Boards & Full Descriptions
+# Greenhouse Jobs Scraper — Search Tracked Companies
 
-Extract public job postings from Greenhouse company boards that you supply. The Actor uses Greenhouse's public Job Board API and returns one default-dataset row per unique job post within each board.
+Search jobs across our tracked Greenhouse company boards. The default experience accepts job-title and/or location text and returns the first matching records found in a stable directory order. It does not discover companies or claim internet-wide coverage.
 
-This is a bounded snapshot. Reruns can return the same jobs again; it does not track new, changed, or removed postings. `updated_at` is Greenhouse's source-updated timestamp, not a guaranteed publication date.
+## Input modes
 
-## Input
+The Console form exposes two modes:
 
-Supply `boards` as board tokens or standard board URLs such as `stripe`, `https://boards.greenhouse.io/stripe`, or `https://job-boards.greenhouse.io/stripe`. To find a token, open a company's Greenhouse board URL and use the path segment after the host. Individual job URLs are rejected rather than interpreted as requests for the whole board.
+- **Search tracked companies** (default): enter at least one of `titleKeywords`, `locationKeywords`, or `departmentKeywords`. The Actor searches the maintained directory of 36 verified public boards as of 2026-10-07.
+- **Specific companies**: select tracked company tokens and/or provide `additionalBoards`. The legacy `boards` input remains supported; an input containing `boards` without an explicit `mode` is treated as Specific companies mode.
 
-`maxJobs` defaults to 100 and is capped at 5,000 across all boards. `titleKeywords`, `locationKeywords`, and `departmentKeywords` are optional case-insensitive OR filters within each group; nonempty groups are combined with AND. Boards are processed in input order, duplicate boards are removed, and later boards are skipped after the global cap or a spending-limit stop.
+The current Apify form supports these selections as string-list fields. It is not presented as a searchable dropdown. Directory tokens include `stripe`, `airbnb`, and `coinbase`; custom boards can be tokens or standard `https://boards.greenhouse.io/{token}` / `https://job-boards.greenhouse.io/{token}` URLs. Individual job URLs are rejected.
 
-The public source is `GET https://boards-api.greenhouse.io/v1/boards/{board_token}/jobs?content=true`. Greenhouse documents this endpoint as public and says `content=true` includes descriptions, departments, and offices. No login, applicant data, application submission, company discovery, proxy, browser, salary extraction, or custom career-site crawling is supported. A board can be unavailable or can expose no jobs; failures are reported distinctly from a valid empty response.
+`maxJobs` defaults to 100 and is capped at 5,000 delivered records across the run. Boards are fetched once in stable directory/input order. The run stops requesting later boards after the result cap or a spending limit. A capped result is the first matching results in that order, not every match or the best matches.
 
-## Example input
+Filters are literal, case-insensitive text matching: OR within each filter group and AND between nonempty groups. Location matching uses employer-provided location text; there is no radius search, geocoding, or inferred remote eligibility. Directory mode rejects an empty filter set so it cannot silently scrape every job.
 
-```json
-{
-  "boards": ["stripe", "https://boards.greenhouse.io/airbnb"],
-  "maxJobs": 100,
-  "titleKeywords": ["engineer", "analyst"],
-  "locationKeywords": ["remote", "new york"],
-  "departmentKeywords": ["engineering"]
-}
-```
+The public source is Greenhouse's unauthenticated Job Board API: `GET https://boards-api.greenhouse.io/v1/boards/{board_token}/jobs?content=true`. Greenhouse documents the endpoint and the `content=true` behavior in the [official Job Board API documentation](https://docs.greenhouse.io/job-board.html). A board failure is distinct from a valid empty board and leaves other delivered records available.
 
 ## Output
 
-Each dataset record includes the source, board token, string job-post ID, nullable internal job ID, title, source location, department and office structures, source HTML description, entity-decoded plain-text description, source absolute URL, `updated_at`, and `retrieved_at`. HTML is stored as data; it is not executed. Missing values remain `null` or empty arrays. The Actor does not infer salary, remote status, or posted dates.
+Each default-dataset row includes `company_name` when the board is verified in the directory, otherwise `null`, plus the board token, job ID, nullable internal job ID, title, source location, departments, offices, HTML and plain-text description, source URL, source `updated_at`, and observation timestamp. HTML is preserved as data and is not executed. Missing values remain `null` or empty arrays.
 
-Sanitized example:
+`RUN_SUMMARY` contains search mode, directory version, available/attempted/succeeded/failed/skipped board counts, source jobs examined, matches, selected/delivered counts, cap and budget coverage, request metrics, and diagnostics only. It never contains job payloads. `SCHEMA_METADATA` records source and normalization notes.
+
+Example input:
+
+```json
+{
+  "mode": "directory",
+  "titleKeywords": ["engineer", "analyst"],
+  "locationKeywords": ["remote", "new york"],
+  "maxJobs": 100
+}
+```
+
+Example output:
 
 ```json
 {
   "source": "greenhouse",
-  "board_token": "example",
-  "job_id": "127817",
-  "internal_job_id": "144381",
-  "title": "Vault Designer",
-  "location": "NYC",
-  "departments": [{"id": 13583, "name": "Design"}],
-  "offices": [{"id": 8304, "name": "New York", "location": "New York, NY, United States"}],
-  "description_html": "<p>Build thoughtful products.</p>",
-  "description_text": "Build thoughtful products.",
-  "job_url": "https://boards.greenhouse.io/example/jobs/127817",
-  "updated_at": "2016-01-14T10:55:28-05:00",
-  "retrieved_at": "2026-10-07T00:00:00Z"
+  "company_name": "Stripe",
+  "board_token": "stripe",
+  "job_id": "8172487",
+  "title": "Abuse Investigator",
+  "location": "Dublin",
+  "departments": [{"name": "8611 Security Analytics"}],
+  "description_text": "Who we are...",
+  "job_url": "https://stripe.com/jobs/search?gh_jid=8172487",
+  "updated_at": "2026-09-25T16:45:00-04:00"
 }
 ```
 
-`RUN_SUMMARY` contains counts, coverage, cap/budget stop reasons, request metrics, and diagnostics only. It never contains job records or descriptions. `SCHEMA_METADATA` records source and normalization notes.
+This is a bounded snapshot. It does not track changes, infer posting dates, provide applicant data, crawl custom career sites, or guarantee freshness. The directory is a maintained sample, not every Greenhouse company; failed or skipped boards mean coverage is incomplete and are reported in `RUN_SUMMARY`.
 
-## Pricing proposal
+## Pricing status
 
-Proposed beta price: `$0.001` per delivered job record (`$1.00 per 1,000`), including the full description and department/office structure. Duplicate, filtered, failed, empty-board, summary, and diagnostic work is not charged. No start fee, synthetic dataset-item fee, or platform-usage pass-through is proposed. Monetization is disabled for this initial private deployment.
+The provisional proposal is `$0.001` per delivered job record (`$1.00 per 1,000`), including descriptions and nested department/office data. Duplicate, filtered, failed, empty-board, summary, and diagnostic work is not charged. This price is not enabled while the Actor remains private. No new charging event was introduced for directory search.
 
-## Official documentation
+## Directory maintenance
 
-- [Greenhouse Job Board API](https://docs.greenhouse.io/job-board.html)
-- [List jobs](https://docs.greenhouse.io/job-board.html#list-jobs)
+`greenhouse_actor/directory.json` contains 36 distinct verified mappings, source board URLs, and the verification date. Run the bounded validation check from this directory before proposing reviewed changes:
 
-See [validation_report.md](validation_report.md) for live observations, tests, and limitations.
+```text
+python3 scripts/refresh_directory.py
+```
+
+It checks each committed token against the official public API and reports source URLs; it does not discover or rewrite entries.
+
+See [validation_report.md](validation_report.md) for measured observations, tests, private build/run evidence, and remaining launch decisions.

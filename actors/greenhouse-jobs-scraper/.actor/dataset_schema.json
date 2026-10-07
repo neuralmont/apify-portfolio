@@ -7,6 +7,7 @@
     "type": "object",
     "properties": {
       "source": {"title":"Source","type":"string"},
+      "company_name": {"title":"Verified company name","type":["string","null"]},
       "board_token": {"title":"Board token","type":"string"},
       "job_id": {"title":"Job post ID","type":"string"},
       "internal_job_id": {"title":"Internal job ID","type":["string","null"]},
@@ -20,7 +21,7 @@
       "updated_at": {"title":"Source updated timestamp","type":["string","null"]},
       "retrieved_at": {"title":"Retrieved at","type":"string"}
     },
-    "required": ["source","board_token","job_id","departments","offices","retrieved_at"]
+    "required": ["source","company_name","board_token","job_id","departments","offices","retrieved_at"]
   },
-  "views": {"overview":{"title":"Jobs","transformation":{"fields":["board_token","job_id","title","location","departments","offices","updated_at","job_url"]},"display":{"component":"table"}}}
+  "views": {"overview":{"title":"Jobs","transformation":{"fields":["company_name","board_token","job_id","title","location","departments","offices","updated_at","job_url"]},"display":{"component":"table"}}}
 }
