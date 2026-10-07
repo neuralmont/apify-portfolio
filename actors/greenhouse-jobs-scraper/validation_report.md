@@ -16,13 +16,15 @@ Command from this directory:
 
 The suite covers input normalization, duplicate boards, filters, entity decoding, job versus internal IDs, empty/malformed/failed boards, global caps, summary redaction, retry behavior, packaging manifests, and billing ChargeResult semantics.
 
-Result: `12 passed in 0.08s` with Python 3.11.14 and `apify==4.0.2`.
+Result after the incremental-delivery fix: `17 passed in 0.11s` with Python 3.11.14 and `apify==4.0.2`. New lifecycle coverage verifies that spending limits stop later board requests, summary counts match actual delivery, and malformed later-board data preserves earlier output while failing the run.
 
 ## Live validation
 
 Three independent public boards were reachable during validation: `stripe`, `airbnb`, and `coinbase`. Each returned HTTP 200 from the documented public list endpoint. Separate bounded observations delivered three records per board: 719/160/223 source rows respectively, one request and zero retries per board. Sanitized source IDs and titles are recorded in the evidence file; no job-detail requests were made.
 
-The private Actor was built from source SHA `87c3473` as build `zwufhSNRsiEq5bFb8` (version `0.1.2`) for Actor `FjuIJU6cw0MqWqwKE`. It remains private and unmonetized. A two-record Stripe smoke run `3nSwGmfwo5kAwHoeg` succeeded with two dataset rows, two unique job IDs, 4.923 seconds, 87,924,736-byte peak memory, and measured platform usage of `$0.0012675362233221534`. A bounded multi-board run `lo3Cov02ME0VoUTMa` requested 300 jobs and succeeded with 300 unique dataset rows in 23.178 seconds, 94,027,776-byte peak memory, and measured platform usage of `$0.0068795481605480125`. It fetched 719 Stripe rows, then skipped Airbnb and Coinbase because the global cap was satisfied; its summary therefore correctly reports `full_input_coverage: false` and `coverage: bounded_global_cap`.
+The corrected private Actor was built from source SHA `cca095a` as build `hJhktQ1576aHL1XLS` (version `0.1.3`) for Actor `FjuIJU6cw0MqWqwKE`. It remains private and unmonetized. The post-fix two-record Stripe smoke run `NJvgGSajhZuiPcaM9` succeeded with two dataset rows, two unique job IDs, 3.247 seconds, 79,466,496-byte peak memory, and measured platform usage of `$0.0007791460208031866`. Its RUN_SUMMARY reported 719 fetched, 719 matched, 2 selected, 2 delivered, one request, zero retries, no errors, `requested_result_completion: complete`, and `all_matching_jobs_delivered: false` because the bounded cap intentionally truncated the board.
+
+The retained bounded multi-board run `lo3Cov02ME0VoUTMa` requested 300 jobs and succeeded with 300 unique dataset rows in 23.178 seconds, 94,027,776-byte peak memory, and measured platform usage of `$0.0068795481605480125`. It fetched 719 Stripe rows, then skipped Airbnb and Coinbase because the global cap was satisfied; its summary correctly reports `full_input_coverage: false` and `coverage: bounded_global_cap`.
 
 The local real-SDK PPE checks used fixture records only. With `apify==4.0.2`, sufficient (3/3), partial (1 delivered before a limit stop), and exact (2/2) cases reconciled dataset rows, job-record events, summaries, and process status. Local test events simulate `$1` each and also include SDK synthetic dataset-item events, so these checks do not validate the proposed `$0.001` price or represent customer billing.
 
