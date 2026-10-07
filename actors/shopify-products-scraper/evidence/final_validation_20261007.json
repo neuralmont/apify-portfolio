@@ -1,0 +1,86 @@
+{
+  "source_commit": "601fa21",
+  "actor_id": "6p2A8KHhUDOXewSXQ",
+  "build": {
+    "version": "0.1.9",
+    "id": "cO7dN55vDwS4k0k7Z",
+    "status": "SUCCEEDED",
+    "monetization": "disabled"
+  },
+  "focused_tests": {
+    "command": "cd actors/shopify-products-scraper && /private/tmp/shopify-actor-venv/bin/python -m pytest -q tests/test_core.py",
+    "result": "17 passed"
+  },
+  "runs": [
+    {
+      "run_id": "iuBPmjKRtxg9Vmfzr",
+      "input": {
+        "productUrls": ["https://www.untuckit.com/products/sydney-4"],
+        "maxProducts": 1
+      },
+      "status": "SUCCEEDED",
+      "exit_code": 0,
+      "dataset_rows": 1,
+      "unique_product_ids": 1,
+      "requests": 3,
+      "retries": 0,
+      "bytes_received": 64297,
+      "runtime_seconds": 4.831,
+      "max_memory_bytes": 83615744,
+      "platform_usage_usd": 0.001126311152789328,
+      "summary": {
+        "records_fetched": 1,
+        "records_delivered": 1,
+        "cap_truncated": false,
+        "requested_result_completion": "complete",
+        "full_window_coverage": false,
+        "errors": []
+      },
+      "canonical_link_http_status": 200
+    },
+    {
+      "run_id": "BuD8Dtpu7m1K9cxfz",
+      "input": {
+        "storeUrls": ["https://www.untuckit.com/"],
+        "maxProducts": 300
+      },
+      "status": "SUCCEEDED",
+      "exit_code": 0,
+      "dataset_rows": 300,
+      "unique_product_ids": 300,
+      "requests": 4,
+      "retries": 0,
+      "bytes_received": 4256755,
+      "runtime_seconds": 17.175,
+      "max_memory_bytes": 91660288,
+      "platform_usage_usd": 0.004636043386931221,
+      "summary": {
+        "records_fetched": 411,
+        "records_delivered": 300,
+        "duplicates": 0,
+        "cap_truncated": true,
+        "pagination_complete": false,
+        "requested_result_completion": "complete",
+        "full_window_coverage": false,
+        "pages_requested": 2,
+        "errors": []
+      },
+      "canonical_link_check": {
+        "invalid_links": 0,
+        "store_urls": ["https://www.untuckit.com"]
+      }
+    }
+  ],
+  "prior_failed_attempts": [
+    {
+      "run_id": "sNgM1AnejpGqWVfPV",
+      "build_id": "KiGyRyun2AN7CqeS1",
+      "reason": "Python 3.14 HTTPS handler missing _check_hostname"
+    },
+    {
+      "run_id": "7PZ4MCnVbCtuIyqbu",
+      "build_id": "2oMhmUoQ2lWntdCGd",
+      "reason": "Python 3.14 HTTPSConnection rejected check_hostname keyword"
+    }
+  ]
+}

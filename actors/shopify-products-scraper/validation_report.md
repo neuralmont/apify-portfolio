@@ -76,3 +76,16 @@ Public competitor pages checked on 2026-10-07 show materially different scopes a
 - Currency is reported only when `/cart.js` exposes it; USD is never assumed.
 - `available` is a boolean source signal, not inventory quantity.
 - Apify's build output does not expose a Git SHA automatically for direct CLI deployment; this report records the source SHA supplied to the final build.
+
+## Final pagination and transport pass from commit `601fa21`
+
+The focused suite passed **17 tests**. The private Actor `6p2A8KHhUDOXewSXQ` built successfully as version `0.1.9`, build `cO7dN55vDwS4k0k7Z`, from this commit. Monetization remains disabled. The build also verified the nested Actor packaging and installed `apify==4.0.2` in the cloud image.
+
+| Check | Run | Result | Dataset / unique IDs | Summary and measured usage |
+| --- | --- | --- | ---: | --- |
+| Individual product | `iuBPmjKRtxg9Vmfzr` | SUCCEEDED, exit 0 | 1 / 1 | 3 requests, 0 retries, 64,297 bytes, 4.831 s, 83,615,744-byte max memory, platform usage `$0.001126311152789328`; requested result complete, full-window coverage not claimed |
+| UNTUCKit catalog, `maxProducts=300` | `BuD8Dtpu7m1K9cxfz` | SUCCEEDED, exit 0 | 300 / 300 | 4 requests, 0 retries, 4,256,755 bytes, 17.175 s, 91,660,288-byte max memory, platform usage `$0.004636043386931221`; 411 source rows fetched across 2 pages, 300 delivered, 0 duplicates, `cap_truncated=true`, `pagination_complete=false` |
+
+The 300 catalog records all had unique product IDs and valid `https://www.untuckit.com/products/...` canonical links; a direct HTTPS check of the individual canonical link returned HTTP 200. The source sample is bounded and must not be treated as complete store coverage. The prior exact-build smoke attempts failed before making source requests because Python 3.14 rejected two custom HTTPS-handler assumptions; those failures are retained as diagnostics in [evidence/final_validation_20261007.json](evidence/final_validation_20261007.json), and are not included as successful validation.
+
+The final transport uses the DNS-validated address for the socket connection while retaining the requested hostname for TLS SNI and certificate verification. Redirect targets are prevalidated before following. No IP addresses were hard-coded and TLS verification was not disabled.
