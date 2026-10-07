@@ -1,0 +1,8 @@
+{
+  "actorSpecification": 1,
+  "title": "Greenhouse Jobs Scraper outputs",
+  "properties": {
+    "runSummary": {"title":"RUN_SUMMARY","type":"string","description":"Key-value output containing counts and diagnostics only."},
+    "schemaMetadata": {"title":"SCHEMA_METADATA","type":"string","description":"Source and normalization notes."}
+  }
+}

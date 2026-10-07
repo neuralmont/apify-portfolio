@@ -1,0 +1,14 @@
+{
+  "title": "Greenhouse Jobs Scraper input",
+  "description": "Extract public jobs from specified Greenhouse board tokens or standard board URLs.",
+  "type": "object",
+  "schemaVersion": 1,
+  "properties": {
+    "boards": {"title":"Greenhouse boards","type":"array","description":"Board tokens or https://boards.greenhouse.io/{token} / https://job-boards.greenhouse.io/{token} URLs.","editor":"stringList","minItems":1,"maxItems":50,"items":{"type":"string"}},
+    "maxJobs": {"title":"Maximum delivered jobs","type":"integer","description":"Global cap across all boards.","default":100,"minimum":1,"maximum":5000},
+    "titleKeywords": {"title":"Title keywords","type":"array","description":"Case-insensitive OR matching within the job title.","editor":"stringList","items":{"type":"string"}},
+    "locationKeywords": {"title":"Location keywords","type":"array","description":"Case-insensitive OR matching within source location text.","editor":"stringList","items":{"type":"string"}},
+    "departmentKeywords": {"title":"Department keywords","type":"array","description":"Case-insensitive OR matching within department names.","editor":"stringList","items":{"type":"string"}}
+  },
+  "required": ["boards"]
+}

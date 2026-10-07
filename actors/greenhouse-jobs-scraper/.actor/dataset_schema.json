@@ -1,0 +1,26 @@
+{
+  "actorSpecification": 1,
+  "title": "Greenhouse public job postings",
+  "description": "One record per unique Greenhouse job post within each supplied board.",
+  "fields": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "type": "object",
+    "properties": {
+      "source": {"title":"Source","type":"string"},
+      "board_token": {"title":"Board token","type":"string"},
+      "job_id": {"title":"Job post ID","type":"string"},
+      "internal_job_id": {"title":"Internal job ID","type":["string","null"]},
+      "title": {"title":"Title","type":["string","null"]},
+      "location": {"title":"Location","type":["string","null"]},
+      "departments": {"title":"Departments","type":"array","items":{"type":"object"}},
+      "offices": {"title":"Offices","type":"array","items":{"type":"object"}},
+      "description_html": {"title":"Description HTML","type":["string","null"]},
+      "description_text": {"title":"Description text","type":["string","null"]},
+      "job_url": {"title":"Job URL","type":["string","null"]},
+      "updated_at": {"title":"Source updated timestamp","type":["string","null"]},
+      "retrieved_at": {"title":"Retrieved at","type":"string"}
+    },
+    "required": ["source","board_token","job_id","departments","offices","retrieved_at"]
+  },
+  "views": {"overview":{"title":"Jobs","transformation":{"fields":["board_token","job_id","title","location","departments","offices","updated_at","job_url"]},"display":{"component":"table"}}}
+}

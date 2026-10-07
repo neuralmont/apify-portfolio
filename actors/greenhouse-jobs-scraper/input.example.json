@@ -1,0 +1,7 @@
+{
+  "boards": ["stripe", "https://boards.greenhouse.io/airbnb"],
+  "maxJobs": 100,
+  "titleKeywords": ["engineer", "analyst"],
+  "locationKeywords": ["remote", "new york"],
+  "departmentKeywords": ["engineering"]
+}

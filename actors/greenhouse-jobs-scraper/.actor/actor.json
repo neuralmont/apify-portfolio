@@ -1,0 +1,14 @@
+{
+  "actorSpecification": 1,
+  "name": "greenhouse-jobs-scraper",
+  "title": "Greenhouse Jobs Scraper — Company Boards & Full Descriptions",
+  "description": "Extract public Greenhouse job postings from supplied company boards with full descriptions, filters, bounded delivery, and source diagnostics.",
+  "version": "0.1",
+  "buildTag": "latest",
+  "dockerContextDir": "..",
+  "dockerfile": "./Dockerfile",
+  "readme": "./README.md",
+  "input": "./input_schema.json",
+  "output": "./output_schema.json",
+  "storages": {"dataset": "./dataset_schema.json"}
+}
