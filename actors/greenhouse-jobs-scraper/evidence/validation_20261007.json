@@ -1,0 +1,144 @@
+{
+  "observed_at": "2026-10-07",
+  "source": "https://docs.greenhouse.io/job-board.html",
+  "repository_source_sha": "87c3473",
+  "actor": {
+    "id": "FjuIJU6cw0MqWqwKE",
+    "name": "greenhouse-jobs-scraper",
+    "visibility": "private",
+    "monetization": "disabled"
+  },
+  "build": {
+    "version": "0.1.2",
+    "id": "zwufhSNRsiEq5bFb8",
+    "status": "SUCCEEDED",
+    "source_sha": "87c3473"
+  },
+  "tests": {
+    "command": "/private/tmp/greenhouse-actor-venv/bin/python -m pytest -q tests",
+    "result": "12 passed in 0.08s",
+    "sdk": "apify==4.0.2",
+    "python": "3.11.14"
+  },
+  "live_source_samples": [
+    {
+      "board": "stripe",
+      "jobs_fetched": 719,
+      "jobs_matched": 719,
+      "delivered": 3,
+      "requests": 1,
+      "retries": 0,
+      "bytes_received": 5583992,
+      "elapsed_seconds": 0.906,
+      "sample_jobs": [
+        {"job_id": "5416444", "title": "Data Analyst", "internal_job_id": "2692714"},
+        {"job_id": "5601879", "title": "Data Scientist", "internal_job_id": "2755198"},
+        {"job_id": "5601881", "title": "Data Analyst", "internal_job_id": "2755199"}
+      ]
+    },
+    {
+      "board": "airbnb",
+      "jobs_fetched": 160,
+      "jobs_matched": 160,
+      "delivered": 3,
+      "requests": 1,
+      "retries": 0,
+      "bytes_received": 2311977,
+      "elapsed_seconds": 0.531,
+      "sample_jobs": [
+        {"job_id": "6757302", "title": "Senior Staff ML Engineer", "internal_job_id": "3109757"},
+        {"job_id": "6852954", "title": "Support Specialist", "internal_job_id": "3136742"},
+        {"job_id": "7107054", "title": "Senior Staff Data Scientist", "internal_job_id": "3203438"}
+      ]
+    },
+    {
+      "board": "coinbase",
+      "jobs_fetched": 223,
+      "jobs_matched": 223,
+      "delivered": 3,
+      "requests": 1,
+      "retries": 0,
+      "bytes_received": 2464194,
+      "elapsed_seconds": 0.533,
+      "sample_jobs": [
+        {"job_id": "6784618", "title": "Staff Software Engineer", "internal_job_id": "3118045"},
+        {"job_id": "7182060", "title": "Complaints Analyst", "internal_job_id": "3224229"},
+        {"job_id": "7304930", "title": "Head of Product Creative", "internal_job_id": "3266730"}
+      ]
+    }
+  ],
+  "cloud_runs": [
+    {
+      "purpose": "smoke",
+      "run_id": "3nSwGmfwo5kAwHoeg",
+      "build_id": "zwufhSNRsiEq5bFb8",
+      "input": {"boards": ["stripe"], "maxJobs": 2},
+      "status": "SUCCEEDED",
+      "exit_code": 0,
+      "dataset_rows": 2,
+      "unique_job_ids": 2,
+      "runtime_seconds": 4.923,
+      "peak_memory_bytes": 87924736,
+      "platform_usage_usd": 0.0012675362233221534,
+      "summary": {
+        "records_fetched": 719,
+        "records_matched": 719,
+        "records_delivered": 2,
+        "cap_truncated": true,
+        "requested_result_completion": "complete",
+        "full_input_coverage": true,
+        "requests": 1,
+        "retries": 0,
+        "errors": []
+      }
+    },
+    {
+      "purpose": "bounded_multi_board_cap",
+      "run_id": "lo3Cov02ME0VoUTMa",
+      "build_id": "zwufhSNRsiEq5bFb8",
+      "input": {"boards": ["stripe", "airbnb", "coinbase"], "maxJobs": 300},
+      "status": "SUCCEEDED",
+      "exit_code": 0,
+      "dataset_rows": 300,
+      "unique_job_ids": 300,
+      "runtime_seconds": 23.178,
+      "peak_memory_bytes": 94027776,
+      "platform_usage_usd": 0.0068795481605480125,
+      "summary": {
+        "boards_requested": 3,
+        "boards_processed": 1,
+        "boards_skipped": 2,
+        "records_fetched": 719,
+        "records_matched": 719,
+        "records_delivered": 300,
+        "duplicates": 0,
+        "cap_truncated": true,
+        "requested_result_completion": "complete",
+        "full_input_coverage": false,
+        "coverage": "bounded_global_cap",
+        "skipped_boards": ["airbnb", "coinbase"],
+        "requests": 1,
+        "retries": 0,
+        "errors": []
+      }
+    }
+  ],
+  "local_sdk_ppe": {
+    "sdk": "apify==4.0.2",
+    "mode": "ACTOR_TEST_PAY_PER_EVENT=true",
+    "fixture_only_source": true,
+    "simulated_event_cost_usd": 1,
+    "results": [
+      {"case": "sufficient", "requested": 3, "budget": 10, "dataset_rows": 3, "job_record_events": 3, "process_exit": 0, "completion": "complete"},
+      {"case": "partial", "requested": 3, "budget": 2, "dataset_rows": 1, "job_record_events": 1, "process_exit": 0, "completion": "incomplete", "billing_limit_reached": true},
+      {"case": "exact", "requested": 2, "budget": 4, "dataset_rows": 2, "job_record_events": 2, "process_exit": 0, "completion": "complete", "billing_limit_reached": true}
+    ],
+    "note": "Local SDK mode also emits synthetic apify-default-dataset-item events at the simulated $1 rate. These are owner/test artifacts and do not verify the proposed monetization price or represent customer billing."
+  },
+  "limitations": [
+    "The live samples are bounded per-board observations, not complete market coverage.",
+    "The 300-job run stopped after stripe satisfied the global cap; airbnb and coinbase were explicitly skipped.",
+    "No customer billing was enabled and no public deployment was made.",
+    "updated_at is source metadata, not a guaranteed posting or freshness timestamp."
+  ]
+}

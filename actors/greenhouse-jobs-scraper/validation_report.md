@@ -1,6 +1,6 @@
 # Greenhouse Jobs Scraper validation report
 
-Initial implementation and private validation were performed on 2026-10-07. Monetization is disabled; no schedule or public deployment is enabled by this Actor.
+Initial implementation and private validation were performed on 2026-10-07. Monetization is disabled; no schedule or public deployment is enabled by this Actor. Sanitized measured evidence is in [evidence/validation_20261007.json](evidence/validation_20261007.json).
 
 ## Source and behavior
 
@@ -14,15 +14,22 @@ Command from this directory:
 /private/tmp/greenhouse-actor-venv/bin/python -m pytest -q tests
 ```
 
-The suite covers input normalization, duplicate boards, filters, entity decoding, job versus internal IDs, empty/malformed/failed boards, global caps, summary redaction, retry behavior, and billing ChargeResult semantics. Local result will be recorded after execution.
+The suite covers input normalization, duplicate boards, filters, entity decoding, job versus internal IDs, empty/malformed/failed boards, global caps, summary redaction, retry behavior, packaging manifests, and billing ChargeResult semantics.
+
+Result: `12 passed in 0.08s` with Python 3.11.14 and `apify==4.0.2`.
 
 ## Live validation
 
-Three public boards were reachable during validation: `stripe`, `airbnb`, and one additional currently working board selected before the final deployment. Records are compared to the public API response; no job-detail requests are made. Counts, source samples, request volume, runtime, memory, and platform usage are recorded in `evidence/` after the final private run.
+Three independent public boards were reachable during validation: `stripe`, `airbnb`, and `coinbase`. Each returned HTTP 200 from the documented public list endpoint. Separate bounded observations delivered three records per board: 719/160/223 source rows respectively, one request and zero retries per board. Sanitized source IDs and titles are recorded in the evidence file; no job-detail requests were made.
+
+The private Actor was built from source SHA `87c3473` as build `zwufhSNRsiEq5bFb8` (version `0.1.2`) for Actor `FjuIJU6cw0MqWqwKE`. It remains private and unmonetized. A two-record Stripe smoke run `3nSwGmfwo5kAwHoeg` succeeded with two dataset rows, two unique job IDs, 4.923 seconds, 87,924,736-byte peak memory, and measured platform usage of `$0.0012675362233221534`. A bounded multi-board run `lo3Cov02ME0VoUTMa` requested 300 jobs and succeeded with 300 unique dataset rows in 23.178 seconds, 94,027,776-byte peak memory, and measured platform usage of `$0.0068795481605480125`. It fetched 719 Stripe rows, then skipped Airbnb and Coinbase because the global cap was satisfied; its summary therefore correctly reports `full_input_coverage: false` and `coverage: bounded_global_cap`.
+
+The local real-SDK PPE checks used fixture records only. With `apify==4.0.2`, sufficient (3/3), partial (1 delivered before a limit stop), and exact (2/2) cases reconciled dataset rows, job-record events, summaries, and process status. Local test events simulate `$1` each and also include SDK synthetic dataset-item events, so these checks do not validate the proposed `$0.001` price or represent customer billing.
 
 ## Limitations
 
 - A board response is a bounded snapshot, not a longitudinal feed. Reruns may return the same jobs.
 - `updated_at` is not labelled as a posting date.
 - Greenhouse availability varies by company configuration; failures are not treated as empty boards.
+- The current endpoint returns the board list in one response; this Actor bounds delivery but does not claim complete territory coverage when the global cap is reached.
 - This Actor does not discover companies, crawl custom career sites, infer salary or remote status, or submit applications.
