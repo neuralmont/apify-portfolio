@@ -1,8 +1,9 @@
 import json
+from urllib.parse import parse_qs, urlparse
 
 import pytest
 
-from shopify_actor.core import ExtractionError, HttpClient, InputError, _product_job, extract, normalize_product, validate_input
+from shopify_actor.core import ExtractionError, HttpClient, InputError, PinnedHTTPConnection, SafeRedirectHandler, _product_job, extract, normalize_product, validate_input
 
 
 def product(pid, handle="one", **extra):
@@ -13,7 +14,7 @@ def product(pid, handle="one", **extra):
 
 class FakeClient:
     def __init__(self, pages, products=None, currency="CAD", fail_page=None):
-        self.pages = pages
+        self.catalog = [item for page in pages for item in page]
         self.products = products or {}
         self.currency = currency
         self.fail_page = fail_page
@@ -21,6 +22,7 @@ class FakeClient:
         self.retries_used = 0
         self.bytes = 0
         self.errors = []
+        self.catalog_requests = []
 
     def get_bytes(self, url):
         self.requests += 1
@@ -34,10 +36,14 @@ class FakeClient:
         if "/products/" in url and url.endswith(".js"):
             handle = url.rsplit("/", 1)[-1][:-3]
             return self.products[handle], url
-        page = int(url.rsplit("page=", 1)[-1])
+        query = parse_qs(urlparse(url).query)
+        page = int(query["page"][0])
+        limit = int(query["limit"][0])
+        self.catalog_requests.append((page, limit))
         if self.fail_page == page:
             raise ExtractionError("synthetic pagination failure")
-        return {"products": self.pages[page - 1] if page <= len(self.pages) else []}, url
+        offset = (page - 1) * limit
+        return {"products": self.catalog[offset:offset + limit]}, url
 
 
 def data(**overrides):
@@ -60,6 +66,14 @@ def test_endpoint_specific_fields_and_locale_path_are_preserved():
     assert record["description_text"] == "Ajax description"
     assert record["product_type"] == "Ajax type"
     assert record["canonical_product_url"].endswith("/en-us/products/one")
+
+
+def test_ajax_root_relative_url_uses_origin_and_keeps_store_separate():
+    ajax = {"id": 2, "handle": "shirt", "url": "/products/shirt", "description": "Ajax", "type": "Shirt", "variants": []}
+    record = normalize_product(ajax, "https://shop.example", "https://shop.example/en-us/products/shirt.js", "CAD", "now")
+    assert record["store_url"] == "https://shop.example"
+    assert record["canonical_product_url"] == "https://shop.example/products/shirt"
+    assert record["store_url"] != record["canonical_product_url"]
 
 
 def test_product_job_uses_resolved_locale_path_for_ajax_endpoint():
@@ -100,11 +114,13 @@ def test_individual_product_exact_cap_is_not_catalog_truncation():
 
 
 def test_multi_page_catalog_and_global_cap():
-    client = FakeClient([[product(i) for i in range(250)], [product(i) for i in range(250, 350)], []])
+    client = FakeClient([[product(i) for i in range(600)]])
     result = extract(data(maxProducts=300), client)
     assert [r["product_id"] for r in result["records"]] == [str(i) for i in range(300)]
+    assert len({r["product_id"] for r in result["records"]}) == 300
+    assert client.catalog_requests == [(1, 250), (2, 250)]
     assert result["summary"]["cap_truncated"] is True
-    assert result["summary"]["records_fetched"] == 350
+    assert result["summary"]["records_fetched"] == 500
 
 
 def test_multi_store_collection_stops_at_shared_cap_and_identifies_skips():
@@ -171,3 +187,26 @@ def test_http_client_rejects_private_dns_before_open(monkeypatch):
     with pytest.raises(ExtractionError):
         HttpClient(5, 0, 1, opener=NeverOpen()).get_bytes("https://evil.example/")
     assert not opened
+
+
+def test_pinned_transport_connects_to_validated_address(monkeypatch):
+    targets = []
+
+    def fake_create_connection(address, timeout, source_address):
+        targets.append(address)
+        raise OSError("stop before network")
+
+    monkeypatch.setattr("shopify_actor.core.socket.create_connection", fake_create_connection)
+    with pytest.raises(OSError):
+        PinnedHTTPConnection("shop.example", address="93.184.216.34").connect()
+    assert targets == [("93.184.216.34", 80)]
+
+
+def test_redirect_dns_is_rejected_before_following(monkeypatch):
+    def fake_getaddrinfo(*args, **kwargs):
+        return [(None, None, None, None, ("127.0.0.1", 443))]
+
+    monkeypatch.setattr("shopify_actor.core.socket.getaddrinfo", fake_getaddrinfo)
+    from urllib.request import Request
+    with pytest.raises(ExtractionError):
+        SafeRedirectHandler().redirect_request(Request("https://public.example/"), None, 302, "Found", {}, "https://evil.example/")

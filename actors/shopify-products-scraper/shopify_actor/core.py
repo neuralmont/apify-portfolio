@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import html
 import hashlib
+import http.client
 import ipaddress
 import json
 import re
@@ -16,7 +17,7 @@ from html.parser import HTMLParser
 from typing import Any, Optional
 from urllib.error import HTTPError, URLError
 from urllib.parse import urljoin, urlparse, urlunparse
-from urllib.request import HTTPRedirectHandler, Request, build_opener
+from urllib.request import HTTPHandler, HTTPRedirectHandler, HTTPSHandler, Request, build_opener
 
 MAX_PRODUCTS = 5000
 CATALOG_PAGE_SIZE = 250
@@ -99,13 +100,13 @@ def validate_input(raw: Optional[dict[str, Any]]) -> dict[str, Any]:
     return data
 
 
-def _check_public_destination(url: str) -> None:
+def _validated_address(url: str) -> str:
     parsed = urlparse(url)
     if parsed.scheme not in {"http", "https"} or not parsed.hostname:
-        raise ExtractionError(f"redirected destination is not HTTP(S): {url}")
+        raise ExtractionError(f"destination is not HTTP(S): {url}")
     host = parsed.hostname.lower().rstrip(".")
     if host in {"localhost", "localhost.localdomain"} or host.endswith(".local"):
-        raise ExtractionError(f"redirected destination is private/local: {url}")
+        raise ExtractionError(f"destination is private/local: {url}")
     try:
         ip = ipaddress.ip_address(host)
     except ValueError:
@@ -113,11 +114,18 @@ def _check_public_destination(url: str) -> None:
             addresses = socket.getaddrinfo(host, parsed.port or (443 if parsed.scheme == "https" else 80), type=socket.SOCK_STREAM)
         except socket.gaierror as exc:
             raise ExtractionError(f"destination DNS failed: {url}") from exc
-        if not addresses or any(not ipaddress.ip_address(item[4][0]).is_global for item in addresses):
-            raise ExtractionError(f"destination does not resolve to public addresses: {url}")
+        resolved = [item[4][0] for item in addresses]
+        if not resolved or any(not ipaddress.ip_address(address).is_global for address in resolved):
+            raise ExtractionError(f"destination does not resolve only to public addresses: {url}")
+        return resolved[0]
     else:
         if not ip.is_global:
             raise ExtractionError(f"destination is non-public: {url}")
+        return str(ip)
+
+
+def _check_public_destination(url: str) -> None:
+    _validated_address(url)
 
 
 class SafeRedirectHandler(HTTPRedirectHandler):
@@ -125,6 +133,37 @@ class SafeRedirectHandler(HTTPRedirectHandler):
         resolved = urljoin(req.full_url, newurl)
         _check_public_destination(resolved)
         return super().redirect_request(req, fp, code, msg, headers, resolved)
+
+
+class PinnedHTTPConnection(http.client.HTTPConnection):
+    def __init__(self, host: str, *args: Any, address: Optional[str] = None, **kwargs: Any):
+        self.validated_address = address
+        super().__init__(host, *args, **kwargs)
+
+    def connect(self) -> None:
+        self.sock = socket.create_connection((self.validated_address or self.host, self.port), self.timeout, self.source_address)
+
+
+class PinnedHTTPSConnection(http.client.HTTPSConnection):
+    def __init__(self, host: str, *args: Any, address: Optional[str] = None, **kwargs: Any):
+        self.validated_address = address
+        super().__init__(host, *args, **kwargs)
+
+    def connect(self) -> None:
+        self.sock = socket.create_connection((self.validated_address or self.host, self.port), self.timeout, self.source_address)
+        if self._tunnel_host:
+            self._tunnel()
+        self.sock = self._context.wrap_socket(self.sock, server_hostname=self._tunnel_host or self.host)
+
+
+class PinnedHTTPHandler(HTTPHandler):
+    def http_open(self, req: Request) -> Any:
+        return self.do_open(PinnedHTTPConnection, req, address=_validated_address(req.full_url))
+
+
+class PinnedHTTPSHandler(HTTPSHandler):
+    def https_open(self, req: Request) -> Any:
+        return self.do_open(PinnedHTTPSConnection, req, context=self._context, check_hostname=self._check_hostname, address=_validated_address(req.full_url))
 
 
 class DomainLimiter:
@@ -145,7 +184,7 @@ class HttpClient:
         self.timeout = timeout
         self.retries = retries
         self.limiter = DomainLimiter(concurrency)
-        self.opener = opener or build_opener(SafeRedirectHandler())
+        self.opener = opener or build_opener(SafeRedirectHandler(), PinnedHTTPHandler(), PinnedHTTPSHandler())
         self.lock = threading.Lock()
         self.requests = 0
         self.retries_used = 0
@@ -238,7 +277,7 @@ def _image_urls(value: Any, store_url: str) -> Optional[list[str]]:
     return urls or None
 
 
-def normalize_product(product: dict[str, Any], store_url: str, endpoint: str, currency_code: Optional[str], observed_at: str) -> dict[str, Any]:
+def normalize_product(product: dict[str, Any], store_url: str, endpoint: str, currency_code: Optional[str], observed_at: str, resolved_product_url: Optional[str] = None) -> dict[str, Any]:
     ajax_money = endpoint.endswith(".js")
 
     def money(value: Any) -> Optional[float]:
@@ -274,8 +313,16 @@ def normalize_product(product: dict[str, Any], store_url: str, endpoint: str, cu
             "availability_known": isinstance(variant.get("available"), bool),
         })
     path = product.get("url") or (f"/products/{handle}" if handle else None)
-    if "/products/" in urlparse(store_url).path and not product.get("url"):
-        canonical = urlunparse((urlparse(store_url).scheme, urlparse(store_url).netloc, urlparse(store_url).path, "", "", ""))
+    if resolved_product_url and not product.get("url"):
+        parsed_resolved = urlparse(resolved_product_url)
+        canonical = urlunparse((parsed_resolved.scheme, parsed_resolved.netloc, parsed_resolved.path, "", "", ""))
+    elif not product.get("url") and "/products/" in urlparse(store_url).path:
+        parsed_store = urlparse(store_url)
+        canonical = urlunparse((parsed_store.scheme, parsed_store.netloc, parsed_store.path, "", "", ""))
+    elif path and urlparse(str(path)).scheme in {"http", "https"}:
+        canonical = str(path)
+    elif path and str(path).startswith("/"):
+        canonical = urljoin(_origin(store_url) + "/", str(path).lstrip("/"))
     else:
         canonical = urljoin(store_url.rstrip("/") + "/", str(path).lstrip("/")) if path else None
     return {
@@ -330,19 +377,19 @@ def _store_job(store_input: str, data: dict[str, Any], client: HttpClient, allow
         currency = _currency(client, resolved)
         seen: set[str] = set()
         page_signatures: set[str] = set()
+        page_size = min(CATALOG_PAGE_SIZE, allowance)
         for page in range(1, MAX_CATALOG_PAGES + 1):
-            remaining = max(1, allowance - len(result["records"]))
-            endpoint = urljoin(resolved.rstrip("/") + "/", f"products.json?limit={min(CATALOG_PAGE_SIZE, remaining)}&page={page}")
+            endpoint = urljoin(resolved.rstrip("/") + "/", f"products.json?limit={page_size}&page={page}")
             payload, _ = client.get_json(endpoint)
             result["pages_requested"] += 1
             rows = payload.get("products") if isinstance(payload, dict) else None
             if not isinstance(rows, list):
                 raise ExtractionError("catalog response lacked a products array")
+            result["products_fetched"] += len(rows)
             signature = hashlib.sha256(json.dumps(rows, sort_keys=True, default=str).encode()).hexdigest()
             if signature in page_signatures:
                 raise ExtractionError("catalog pagination made no progress: repeated page")
             page_signatures.add(signature)
-            result["products_fetched"] += len(rows)
             if not rows:
                 result["coverage"] = "complete_until_empty_page"
                 break
@@ -362,7 +409,7 @@ def _store_job(store_input: str, data: dict[str, Any], client: HttpClient, allow
                     result["duplicates"] += 1
                     continue
                 if len(result["records"]) < allowance:
-                    result["records"].append(normalize_product(product, resolved, endpoint, currency, observed))
+                    result["records"].append(normalize_product(product, origin, endpoint, currency, observed))
                     existing_identities.add(identity)
                     new_page_records += 1
                 if len(result["records"]) >= allowance:
@@ -372,7 +419,7 @@ def _store_job(store_input: str, data: dict[str, Any], client: HttpClient, allow
                 break
             if new_page_records == 0:
                 raise ExtractionError("catalog pagination made no progress: page had no new product IDs")
-            if len(rows) < CATALOG_PAGE_SIZE:
+            if len(rows) < page_size:
                 result["coverage"] = "complete_short_page"
                 break
         else:
@@ -402,7 +449,7 @@ def _product_job(url: str, client: HttpClient) -> dict[str, Any]:
         product, _ = client.get_json(endpoint)
         if not isinstance(product, dict) or product.get("id") is None:
             raise ExtractionError("product response lacked a product ID")
-        result["records"].append(normalize_product(product, resolved_home, endpoint, currency, datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")))
+        result["records"].append(normalize_product(product, _origin(resolved_home), endpoint, currency, datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"), resolved_home))
         result["status"] = "success"
     except ExtractionError as exc:
         result["errors"].append(str(exc))
@@ -447,12 +494,12 @@ def extract(data: dict[str, Any], client: Optional[HttpClient] = None) -> dict[s
                 records.append(record)
     store_outcomes = [x for x in outcomes if "resolved_store_url" in x]
     candidate_count = sum(int(x.get("products_fetched", len(x.get("records", [])))) for x in outcomes)
-    cap = len(records) >= data["maxProducts"] and (candidate_count > data["maxProducts"] or any(x.get("coverage") == "truncated_at_global_cap" for x in store_outcomes))
+    cap = len(records) >= data["maxProducts"] and (bool(skipped_inputs) or candidate_count > data["maxProducts"] or any(x.get("coverage") == "truncated_at_global_cap" for x in store_outcomes))
     summary = {
         "effective_input": data,
         "records_fetched": sum(int(x.get("products_fetched", len(x.get("records", [])))) for x in outcomes),
         "records_delivered": len(records),
-        "duplicates": duplicates + sum(int(x.get("duplicates", 0)) for x in outcomes),
+        "duplicates": duplicates,
         "cap_truncated": cap,
         "pagination_complete": bool(store_outcomes) and all(
             x.get("status") == "success"
