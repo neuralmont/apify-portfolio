@@ -148,6 +148,10 @@ class PinnedHTTPConnection(http.client.HTTPConnection):
 class PinnedHTTPSConnection(http.client.HTTPSConnection):
     def __init__(self, host: str, *args: Any, address: Optional[str] = None, **kwargs: Any):
         self.validated_address = address
+        check_hostname = kwargs.pop("check_hostname", None)
+        context = kwargs.get("context")
+        if context is not None and check_hostname is not None:
+            context.check_hostname = check_hostname
         super().__init__(host, *args, **kwargs)
 
     def connect(self) -> None:
