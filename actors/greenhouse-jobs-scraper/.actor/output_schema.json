@@ -1,8 +1,9 @@
 {
-  "actorSpecification": 1,
+  "actorOutputSchemaVersion": 1,
   "title": "Greenhouse Jobs Scraper outputs",
   "properties": {
-    "runSummary": {"title":"RUN_SUMMARY","type":"string","description":"Key-value output containing counts and diagnostics only."},
-    "schemaMetadata": {"title":"SCHEMA_METADATA","type":"string","description":"Source and normalization notes."}
+    "jobResults": {"title":"Job results","type":"string","description":"Job records in the run's default dataset.","template":"{{links.apiDefaultDatasetUrl}}/items"},
+    "runSummary": {"title":"RUN_SUMMARY","type":"string","description":"Key-value output containing counts and diagnostics only.","template":"{{links.apiDefaultKeyValueStoreUrl}}/records/RUN_SUMMARY"},
+    "schemaMetadata": {"title":"SCHEMA_METADATA","type":"string","description":"Source and normalization notes.","template":"{{links.apiDefaultKeyValueStoreUrl}}/records/SCHEMA_METADATA"}
   }
 }
